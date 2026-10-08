@@ -1,0 +1,68 @@
+{
+  "name": "minimalist-portfolio-json",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": "24.19.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "npm run build:source && npm run cv:pdf && npm run build:final",
+    "build:source": "astro check && astro build",
+    "build:final": "astro build",
+    "postbuild": "node scripts/check-build.mjs",
+    "preview": "astro preview",
+    "astro": "astro",
+    "cv:pdf": "node scripts/build-cv-pdf.mjs",
+    "cv:pdf:ats": "node scripts/check-cv-ats.mjs --poppler",
+    "favicons": "node scripts/build-favicons.mjs",
+    "ask:questions": "node scripts/build-ask-questions.mjs",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "test:visual": "node scripts/visual-docker.mjs",
+    "test:lighthouse": "node scripts/lighthouse-docker.mjs",
+    "test:services": "node scripts/services-test.mjs",
+    "test:functions": "node scripts/functions-smoke.mjs",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:functions": "tsc -p functions/tsconfig.json",
+    "check:bindings": "wrangler types functions/worker-configuration.d.ts --env production --env-interface CloudflareBindings --check",
+    "check:links": "node scripts/check-links.mjs",
+    "scan:secrets": "node scripts/gitleaks.mjs",
+    "deployment:manifest": "node scripts/write-deployment-manifest.mjs",
+    "deployment:verify": "node scripts/verify-deployment-manifest.mjs"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.4",
+    "astro": "^7.3.2"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@axe-core/playwright": "^4.13.0",
+    "@cloudflare/workers-types": "5.20260911.1",
+    "@fontsource/inter": "^5.3.0",
+    "@jsonresume/schema": "^1.2.1",
+    "@playwright/test": "^1.62.1",
+    "@types/jsonschema": "^0.0.5",
+    "happy-dom": "20.12.0",
+    "pdfjs-dist": "^6.3.289",
+    "playwright": "^1.62.1",
+    "prettier": "^3.9.6",
+    "prettier-plugin-astro": "^0.14.1",
+    "satori": "0.29.1",
+    "sharp": "^0.35.5",
+    "typescript": "6.0.3",
+    "vitest": "^4.1.10",
+    "wrangler": "4.131.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "esbuild@0.28.1": true,
+    "workerd@1.20260828.1": true,
+    "workerd@1.20260910.1": true,
+    "fsevents@2.3.2": false,
+    "fsevents@2.3.3": false
+  }
+}

@@ -1,0 +1,97 @@
+/**
+ * La insignia de estado de un proyecto: tarjetas de la portada, diálogo y ficha.
+ *
+ * Vivía en el `<style is:global>` de `ProjectDetail.astro`, y por eso la
+ * portada y el índice incluían un `<ProjectDetail stylesOnly />` que no pintaba
+ * nada: era la manera de que Astro metiera en esas páginas la hoja entera del
+ * diálogo —15,8 KB bloqueantes en la portada, y de rebote en privacidad,
+ * servicios y «sobre mí», que comparten módulo de ruta con el índice—. Ahora
+ * la insignia viaja con la hoja del layout —la importa `Layout.astro`, y sólo
+ * él: desde dos componentes Vite la sacaba a un trozo aparte, una petición
+ * bloqueante más— y la hoja del diálogo llega con la ficha cuando se abre
+ * (PERF-06).
+ *
+ * Global y una sola vez: antes había una copia en la tarjeta y otra en el
+ * diálogo, con un comentario recordando que había que cambiarlas a la vez. El
+ * estado se distingue por la insignia, que además lleva su etiqueta de texto:
+ * ningún dato depende del color.
+ */
+[data-status="published"] {
+  --status: var(--status-published);
+}
+
+[data-status="in-development"] {
+  --status: var(--status-development);
+}
+
+[data-status="private"] {
+  --status: var(--status-private);
+}
+
+/**
+ * Insignia de instrumento, no píldora rellena.
+ *
+ * Antes era una superficie sólida de color con la etiqueta en blanco: siete
+ * tarjetas seguidas daban siete manchas, y el estado —que es metadato— pesaba
+ * en la rejilla más que el nombre del proyecto. Ahora el color va sólo en el
+ * medidor y en el texto, sobre el fondo de la tarjeta.
+ *
+ * Es la misma forma que la fila de idiomas —etiqueta en versalitas mono más
+ * un medidor de segmentos— para que las dos se lean como el mismo sistema.
+ * Aquí el medidor no mide un nivel sino un recorrido: publicado llena los
+ * tres segmentos, en desarrollo dos, privado uno.
+ */
+.status {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--status);
+  display: inline-flex;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  gap: 6px;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  min-height: 1.75rem;
+  padding: 0.35rem 0;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/**
+ * Tres segmentos: la vía del proyecto de principio a fin.
+ *
+ * El relleno lo dibuja un `linear-gradient` de dos paradas —color hasta
+ * `--filled` segmentos, apagado a partir de ahí— sobre una máscara de
+ * segmentos. Así son dos capas de fondo y ningún nodo: la insignia aparece
+ * catorce veces por página entre la rejilla y los diálogos.
+ */
+.status::before {
+  --filled: 3;
+  /* La parada va en fracción del recorrido y no en píxeles: así el corte cae
+     siempre en el hueco entre dos segmentos y la insignia se puede encoger
+     —lo hace en papel— sin que el relleno se descuadre. */
+  background-image: linear-gradient(
+    to right,
+    var(--status) 0 calc(var(--filled) / 3 * 100%),
+    var(--border-hover) calc(var(--filled) / 3 * 100%) 100%
+  );
+  block-size: 8px;
+  content: "";
+  inline-size: 16px;
+  mask-image: repeating-linear-gradient(
+    to right,
+    #000 0 4px,
+    transparent 4px 6px
+  );
+}
+
+[data-status="in-development"] .status::before {
+  --filled: 2;
+}
+
+[data-status="private"] .status::before {
+  --filled: 1;
+}

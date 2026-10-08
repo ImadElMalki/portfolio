@@ -1,0 +1,13 @@
+dist/
+.astro/
+node_modules/
+package-lock.json
+public/_headers
+
+# Prettier 3 no lee el .gitignore: hay que repetirlo aquí.
+.shots/
+test-results/
+playwright-report/
+.playwright-mcp/
+tmp/
+lighthouse-report/

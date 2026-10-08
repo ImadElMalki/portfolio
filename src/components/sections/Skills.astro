@@ -1,0 +1,446 @@
+---
+import Section from "../Section.astro"
+import type { CvData, Locale } from "@/cv"
+import { sectionId, sectionTitle } from "@/lib/sections"
+import { technologyDefinition } from "@/lib/techIcons"
+import type { TechnologyGroup } from "@/lib/technologyRegistry"
+import { localized, localizedPath, t } from "@/lib/i18n"
+
+interface Props {
+  locale: Locale
+  cv: Readonly<CvData>
+}
+
+const { locale, cv } = Astro.props
+const { skills } = cv
+
+/**
+ * La línea de tecnologías del PDF, y por qué se escribe a mano.
+ *
+ * En el perfil `focused` la rejilla de chips no se imprime: son diez cajas con
+ * su icono y su medidor, o sea diez imágenes y ningún renglón que un extractor
+ * pueda leer de corrido. Esto lo dice en texto seguido, que es lo que un ATS
+ * trocea. Va a mano y no generado de `cv.json` porque aquí caben además las
+ * palabras que un filtro busca y el CV no lista como habilidad —JPA, DevOps, el
+ * nivel de inglés—.
+ */
+const PDF_SKILLS = {
+  es: "Angular · TypeScript · Java · Spring Boot · JPA · Astro · Svelte · PostgreSQL · Supabase · Cloudflare Workers · Docker y DevOps · Git y GitHub · inglés B2.",
+  ca: "Angular · TypeScript · Java · Spring Boot · JPA · Astro · Svelte · PostgreSQL · Supabase · Cloudflare Workers · Docker i DevOps · Git i GitHub · anglès B2.",
+  en: "Angular · TypeScript · Java · Spring Boot · JPA · Astro · Svelte · PostgreSQL · Supabase · Cloudflare Workers · Docker and DevOps · Git and GitHub · B2 English.",
+} as const
+
+/**
+ * Chips sin medidor. Ni el nivel declarado ni el recuento de proyectos.
+ *
+ * ## Por qué no el nivel
+ *
+ * Hasta el 06-10-2026 cada chip llevaba tres segmentos con `skills[].level`. Es
+ * el caso de manual de lo que quien contrata pide quitar de un CV: una barra
+ * de autoevaluación no responde a nada que se pueda comprobar —«avanzado» según
+ * quién—, se lee como relleno y un ATS no la extrae, porque es un dibujo y no
+ * texto. La prueba de lo que se sabe está en Experiencia y en Proyectos, que es
+ * donde se dice qué se hizo con cada cosa.
+ *
+ * El nivel sigue en `cv.json`: es campo obligatorio de JSON Resume y lo sirve
+ * `/cv.json` a quien lo consuma. Aquí sólo deja de dibujarse.
+ *
+ * ## Por qué tampoco el recuento
+ *
+ * Se probó hasta el 25-08-2026 (`skillUsage.ts`) y sigue sin valer: mide la
+ * lista de proyectos, no el oficio. Angular y Java, el trabajo diario, salían a
+ * uno; Astro y Git, a cero. Con un umbral de dos, que es lo que decía algo, sólo
+ * TypeScript llevaría cifra.
+ *
+ * ## Diez, y eran veinte
+ *
+ * La sección listaba todo lo que se ha tocado alguna vez —HTML, CSS,
+ * JavaScript, Git, GitHub, React, Kotlin, MySQL, Power Apps, Power BI— y con
+ * ello enterraba lo que sí decide una entrevista. Un chip vale lo mismo que
+ * cualquier otro a la vista: veinte chips son veinte pesos iguales. El corte
+ * vive en `cv.json`, que es donde vive el currículum; aquí no hay ninguna lista
+ * escrita.
+ */
+
+/**
+ * Cinco grupos, y el orden es el del párrafo que uno diría en voz alta.
+ *
+ * Los chips en una sola fila envolvente no dicen dónde está la fuerza: Angular y
+ * PostgreSQL ocupan lo mismo y se leen igual. Agrupados, la primera línea es el
+ * oficio y las de abajo el alcance.
+ *
+ * El reparto no vive aquí sino en `technologyRegistry.ts`, junto al mapa de
+ * nombre a identificador: es la misma llave y no debe haber dos. Ver su nota
+ * para el criterio, y en particular para qué hace Kotlin acompañado.
+ */
+const SKILL_GROUPS = [
+  { id: "frontend", label: "skillsFrontend" },
+  { id: "backend", label: "skillsBackend" },
+  { id: "cloud-data", label: "skillsCloudData" },
+  { id: "mobile-other", label: "skillsMobileOther" },
+  { id: "tools", label: "skillsTools" },
+] as const satisfies readonly { id: TechnologyGroup; label: string }[]
+
+/* Los cinco se declaran aunque hoy salgan cuatro: con el recorte a diez
+   tecnologías no queda ninguna en «Mobile y otras», y el filtro de más abajo no
+   pinta los grupos vacíos. Quitar la entrada del array sólo escondería el chip
+   el día que vuelva una. */
+
+/* Una habilidad que `cv.json` nombre y el registro no conozca cae aquí en vez
+   de desaparecer de la página. No debería pasar —`registries.test.ts` exige que
+   el registro cubra todos los nombres del CV— pero el modo de fallar importa:
+   perder un chip en silencio es peor que enseñarlo en el grupo equivocado. */
+const FALLBACK_GROUP: TechnologyGroup = "tools"
+
+const entries = skills.map((skill) => {
+  const definition = technologyDefinition(skill.name)
+  return {
+    ...skill,
+    definition,
+    group: definition?.group ?? FALLBACK_GROUP,
+  }
+})
+
+/* Dentro de cada grupo se conserva el orden de `cv.json`, que ya es orden de
+   autor. Un grupo sin chips no se pinta. */
+const groups = SKILL_GROUPS.map((group) => ({
+  ...group,
+  entries: entries.filter((entry) => entry.group === group.id),
+})).filter((group) => group.entries.length > 0)
+---
+
+<Section id={sectionId("skills")} title={sectionTitle("skills", locale)}>
+  <div class="skill-groups">
+    {
+      groups.map((group) => (
+        <div class="skill-group">
+          {/* `h3` y no `p`: `Section` ya emite el `h2` de «Habilidades», así
+              que estos cinco cuelgan de él y el esquema del documento cuenta lo
+              mismo que se ve. */}
+          <h3 class="label-mono">{t(locale, group.label)}</h3>
+          <ul>
+            {group.entries.map(({ name, definition }) => {
+              const Icon = definition?.Icon
+
+              return (
+                /* El ID estable conduce icono y color. El texto sigue siendo
+                   contenido visible y puede cambiar sin romper esa relación. */
+                <li data-tech={definition?.id}>
+                  {Icon && (
+                    <span class="skill-icon" aria-hidden="true">
+                      <Icon />
+                    </span>
+                  )}
+                  <span>{name}</span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ))
+    }
+  </div>
+  <p class="pdf-focused-skills">
+    {localized(PDF_SKILLS, locale)}
+    {" "}
+    <a href={localizedPath(locale)}>imadelmalki.com</a>
+  </p>
+</Section>
+
+<style>
+  .pdf-focused-skills {
+    display: none;
+  }
+
+  /**
+   * Dos columnas, y las reparte el navegador.
+   *
+   * Con el rótulo al lado la sección bajó de 479 px a 354, pero seguía siendo
+   * una torre: cinco filas apiladas de las que **cuatro tienen entre dos y
+   * cuatro chips**, o sea cuatro filas medio vacías ocupando el ancho entero.
+   *
+   * `columns` y no una rejilla de dos columnas: los grupos son de tamaños muy
+   * distintos —Frontend tiene ocho chips y Backend dos— y una rejilla fija los
+   * repartiría 3+2 dejando una columna mucho más alta que la otra. El
+   * multicolumna equilibra las dos alturas él solo, que es justo el trabajo que
+   * aquí no se puede hacer a mano sin cablear qué grupo va dónde.
+   */
+  .skill-groups {
+    column-gap: 2.25rem;
+    columns: 2;
+  }
+
+  /* `break-inside` es lo que impide que un grupo se parta entre columnas y
+     deje su rótulo arriba del todo y sus chips en la otra mitad. El relleno de
+     abajo hace de separación entre grupos: un `margin` en multicolumna se
+     colapsa contra el canto y el último grupo de cada columna quedaría con un
+     hueco que el otro no tiene. */
+  .skill-group {
+    break-inside: avoid;
+    padding-block-end: 0.7rem;
+  }
+
+  /* El rótulo vuelve a su renglón: dentro de una columna de ~430 px no queda
+     ancho para ponerlo al lado sin estrangular los chips. La voz la pone
+     `label-mono`; aquí sólo el hueco hasta su fila. */
+  .skill-group h3 {
+    margin-block-end: 0.3rem;
+  }
+
+  ul {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+
+  li {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.7rem;
+    color: var(--text);
+    display: flex;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    gap: 0.45rem;
+    /* 2 rem y no 2,5: el chip no es pulsable —es un `li`, no un enlace— así que
+       no le aplica el mínimo de 44 px de la WCAG 2.5.8, y media rem por veinte
+       chips repartidos en cinco filas son cincuenta píxeles de sección. */
+    min-height: 2rem;
+    padding: 0.35rem 0.6rem;
+    transition:
+      background-color 200ms ease,
+      border-color 200ms ease;
+  }
+
+  .skill-icon {
+    display: inline-flex;
+    transition: color 200ms ease;
+  }
+
+  .skill-icon :global(svg) {
+    flex: 0 0 auto;
+    height: 1rem;
+    width: 1rem;
+  }
+
+  @media print {
+    /* Una columna en papel: el multicolumna reparte los grupos a izquierda y
+       derecha, y ahí el orden visual deja de ser el del documento —que es el que
+       lee un extractor—. Sólo se aplica fuera del perfil `focused`, donde la
+       rejilla no se imprime. */
+    .skill-groups {
+      columns: 1;
+    }
+
+    :global(:root[data-pdf-profile="focused"]) .skill-groups {
+      display: none;
+    }
+
+    :global(:root[data-pdf-profile="focused"]) .pdf-focused-skills {
+      color: var(--text-subtle);
+      display: block;
+      font-size: 0.72rem;
+      line-height: 1.4;
+    }
+
+    .pdf-focused-skills a {
+      color: inherit;
+    }
+  }
+
+  /* El color de marca lo lleva el icono, no el texto: teñir los nombres los
+     dejaría por debajo de AA en la mitad de los casos, y el nombre es el dato.
+     El chip acompaña con un tinte del 10 %, suficiente para que el conjunto se
+     lea como encendido sin competir con el icono. */
+  @media (hover: hover) {
+    li:hover {
+      background: color-mix(in srgb, var(--tech) 10%, var(--surface));
+      border-color: color-mix(in srgb, var(--tech) 45%, transparent);
+    }
+
+    li:hover .skill-icon {
+      color: var(--tech);
+    }
+  }
+
+  /* Una columna: dos de ~160 px dejarían renglones de un chip. */
+  @media (width <= 640px) {
+    .skill-groups {
+      columns: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    li,
+    .skill-icon {
+      transition: none;
+    }
+  }
+
+  @media print {
+    /* En papel el aire entre grupos se paga en páginas: los cinco bloques se
+       aprietan a lo que hace falta para que el rótulo siga leyéndose como
+       cabecera de su fila y no como un chip más. */
+    .skill-groups {
+      gap: 0.45rem;
+    }
+
+    /* En papel, una sola columna a todo el ancho: el multicolumna reparte por
+       alto y en una hoja el alto es justo lo que hay que gastar antes de
+       cambiar de página, no repartir. */
+    .skill-groups {
+      columns: 1;
+    }
+
+    .skill-group {
+      padding-block-end: 0.3rem;
+    }
+
+    .skill-group h3 {
+      margin-block-end: 0.18rem;
+    }
+
+    ul {
+      gap: 0.28rem;
+    }
+
+    li {
+      min-height: auto;
+      padding: 0.2rem 0.4rem;
+    }
+  }
+</style>
+
+{
+  /* --- Colores de marca -------------------------------------------------------
+
+     Global y no acotado, porque el mapa lo consumen dos componentes: los chips
+     de aquí y los del diálogo de cada proyecto (`ProjectDetail.astro`). Vive en
+     este archivo y no en `Layout.astro` a propósito: el CSS va incrustado en
+     cada página, y desde el layout se colaría también en la landing de
+     servicios y en las tres 404, que no tienen un solo chip. Este componente
+     solo se incrusta en las tres portadas, que es justo donde están los chips y
+     los diálogos.
+
+     Dos versiones por tecnología porque el color oficial casi nunca sirve para
+     los dos fondos: el amarillo de JavaScript desaparece sobre blanco y el azul
+     de PostgreSQL se hunde en el tema oscuro. Se parte del hex de marca y se
+     corrige la luminosidad por tema.
+
+     El mínimo es 3:1 contra el fondo real del chip encendido —que no es
+     `--surface`, sino la mezcla al 10 % de `Skills`/`ProjectDetail`—, que es lo
+     que la WCAG 1.4.11 pide a un elemento gráfico. Lo comprueba
+     `contrast.test.ts` leyendo estas mismas declaraciones, y exige una regla por
+     cada tecnología que `cv.json` nombre: en habilidades o en proyectos. */
+}
+<style is:global>
+  /* Una tecnología sin color propio se enciende con el acento de la página en
+     vez de quedarse sin efecto. Hoy las tiene todas, pero los chips se generan
+     desde `cv.json` y una entrada nueva no debería romper nada. */
+  [data-tech] {
+    --tech: var(--accent);
+  }
+
+  [data-tech="angular"] {
+    --tech: light-dark(#c3002f, #f2617a);
+  }
+  [data-tech="typescript"] {
+    --tech: light-dark(#2f6cb5, #6fa8e8);
+  }
+  [data-tech="javascript"] {
+    --tech: light-dark(#8a6d00, #e8d44d);
+  }
+  [data-tech="java"] {
+    --tech: light-dark(#c25a00, #f0983f);
+  }
+  [data-tech="spring-boot"] {
+    --tech: light-dark(#3f7d24, #8fd35f);
+  }
+  [data-tech="power-apps"] {
+    --tech: light-dark(#6b2a70, #c98ecd);
+  }
+  [data-tech="power-bi"] {
+    --tech: light-dark(#8a6200, #eec230);
+  }
+  [data-tech="html"] {
+    --tech: light-dark(#c2410c, #f0703f);
+  }
+  [data-tech="css"] {
+    --tech: light-dark(#1565a8, #5eaae4);
+  }
+  [data-tech="react"] {
+    --tech: light-dark(#0b7c93, #61dafb);
+  }
+  [data-tech="svelte"] {
+    --tech: light-dark(#cc3200, #ff6d40);
+  }
+  [data-tech="kotlin"] {
+    --tech: light-dark(#6b3fd4, #a68bff);
+  }
+  [data-tech="cloudflare-workers"],
+  [data-tech="cloudflare-d1"],
+  [data-tech="cloudflare-queues"],
+  [data-tech="cloudflare-r2"] {
+    --tech: light-dark(#b35a15, #f6821f);
+  }
+  [data-tech="astro"] {
+    --tech: light-dark(#6b34c9, #b18bf0);
+  }
+  [data-tech="postgresql"] {
+    --tech: light-dark(#2f6089, #7aa8cc);
+  }
+  [data-tech="mysql"] {
+    --tech: light-dark(#00697f, #4dbdd1);
+  }
+  [data-tech="supabase"] {
+    --tech: light-dark(#22795a, #3ecf8e);
+  }
+  [data-tech="docker"] {
+    --tech: light-dark(#1560c9, #5b96f5);
+  }
+  [data-tech="git"] {
+    --tech: light-dark(#c73a1d, #f0705a);
+  }
+  [data-tech="github"] {
+    --tech: light-dark(#2b3138, #c9d1d9);
+  }
+  [data-tech="capacitor"] {
+    --tech: light-dark(#0074c5, #34acff);
+  }
+  [data-tech="chrome-extensions"] {
+    --tech: light-dark(#0c54ca, #4285f4);
+  }
+  [data-tech="elementor"] {
+    --tech: light-dark(#92003b, #ff3486);
+  }
+  [data-tech="gmail-api"] {
+    --tech: light-dark(#c12214, #ec5447);
+  }
+  [data-tech="hono"] {
+    --tech: light-dark(#bd5002, #fd8935);
+  }
+  [data-tech="oauth"] {
+    --tech: light-dark(#506c86, #809bb3);
+  }
+  [data-tech="php"] {
+    --tech: light-dark(#4c5089, #7c80b7);
+  }
+  [data-tech="playwright"] {
+    --tech: light-dark(#238327, #5ed463);
+  }
+  [data-tech="python"] {
+    --tech: light-dark(#3470a2, #669ece);
+  }
+  [data-tech="vitest"] {
+    --tech: light-dark(#5c7d16, #b3e152);
+  }
+  [data-tech="wordpress"] {
+    --tech: light-dark(#21759b, #57b2db);
+  }
+  [data-tech="room"],
+  [data-tech="work-manager"] {
+    --tech: light-dark(#188348, #53e092);
+  }
+</style>

@@ -1,0 +1,1440 @@
+---
+import Section from "@/components/Section.astro"
+import Mail from "@/icons/Mail.astro"
+import LinkedIn from "@/icons/LinkedIn.astro"
+import GitHub from "@/icons/GitHub.astro"
+import WhatsApp from "@/icons/WhatsApp.astro"
+import WorldMap from "@/icons/WorldMap.astro"
+import type { IconMap } from "@/types"
+import type { CvData, Locale } from "@/cv"
+import { portraitSources } from "@/lib/portraitImages"
+import { HERO_STATUS } from "@/data/availability"
+import { whatsappUrl } from "@/lib/contactLinks"
+import { printableUrl } from "@/lib/cvFormat"
+import { experienceYears } from "@/lib/cvStats"
+import { localized, localizedPath, t } from "@/lib/i18n"
+import { CLOSING_SECTION_ID, sectionId } from "@/lib/sections"
+
+interface Props {
+  locale: Locale
+  cv: Readonly<CvData>
+}
+
+const { locale, cv } = Astro.props
+const { basics } = cv
+const { name, label, location, profiles, email, phone } = basics
+const { city, region, countryCode } = location
+const nameParts = name.trim().split(/\s+/)
+const [givenName, ...familyNameParts] = nameParts
+const familyName = familyNameParts.join(" ")
+
+/**
+ * El retrato, en dos variantes y **una sola descarga**.
+ *
+ * Hasta el 11-09-2026 esto eran dos `<Image priority>`, claro y oscuro, y el
+ * CSS escondía el que no tocaba con `display:none`. Un `<img>` con `src` se
+ * descarga igual aunque esté en `display:none`, así que la portada pedía las
+ * dos —~50 KiB cada una en 3×— y las dos con `fetchpriority="high"`: la imagen
+ * que define el LCP competía por la cola de prioridad alta con otra que no se
+ * iba a pintar nunca.
+ *
+ * Con `<picture>` el `media` lo resuelve el *preload scanner*, que sólo pide la
+ * que casa. Lo que el `media` no sabe es que aquí el tema se puede forzar a
+ * mano, y de eso se encargan otros dos sitios —ninguno de los dos puede estar
+ * en este archivo—:
+ *
+ * - El primer pintado, un `is:inline` de `Layout.astro` detrás del `<slot />`.
+ *   Aquí no, porque un `is:inline` metido en un componente no entra en el
+ *   cálculo de hashes de la CSP y el navegador lo bloquea sin que el build
+ *   avise. Está escrito en `ServicesLanding.astro` y volvió a pasar aquí.
+ * - Los cambios posteriores, `portraitTheme.ts` por el evento `theme-changed`.
+ *
+ * Las cuatro variantes las calcula `portraitImages.ts`, que es también de donde
+ * las saca el `<link rel="preload">` del `<head>`: las direcciones tienen que
+ * ser las mismas o se descargaría el retrato dos veces. El retrato es el
+ * elemento LCP de la portada (PERF-03).
+ */
+const portraits = await portraitSources()
+
+/**
+ * La matrícula: `[ IEM ] · DEV · ES`.
+ *
+ * Serigrafía de la trasera de un aparato, no un dato del currículum. Las
+ * iniciales salen del propio nombre —tres, que es lo que cabe leído de un
+ * vistazo— para que no puedan quedarse desfasadas si `cv.json` cambia, y el
+ * código de país es el mismo `countryCode` que ya usa la fila de ubicación.
+ *
+ * `DEV` va escrito y no traducido a propósito: en una matrícula las tres letras
+ * son un código, y traducirlas —«DES», «DEV», «DEV»— sería tratarlo como texto.
+ */
+const initials = nameParts
+  .slice(0, 3)
+  .map((part) => part[0]?.toUpperCase() ?? "")
+  .join("")
+const callsign = `[ ${initials} ] · DEV · ${countryCode}`
+
+const SOCIAL_ICONS: IconMap = {
+  GitHub,
+  LinkedIn,
+}
+
+/**
+ * Contacto de la versión impresa: enlaces de verdad, no una línea de texto.
+ *
+ * Chromium convierte cada `<a href>` en una anotación del PDF, así que el
+ * correo y los perfiles se pueden pulsar desde el archivo. Antes esto era una
+ * cadena unida con « • » y el PDF salía con dos únicos enlaces —los de las
+ * empresas—, con las direcciones enteras escritas a mano.
+ *
+ * El teléfono **no** entra: alimenta el enlace de WhatsApp de la pantalla y
+ * nada más. En el CV impreso el correo y los perfiles ya son vía suficiente, y
+ * un número escrito en un PDF que se reenvía no se puede retirar.
+ */
+const printLinks = [
+  ...(email ? [{ href: `mailto:${email}`, text: email }] : []),
+  ...profiles.map(({ url }) => ({ href: url, text: printableUrl(url) })),
+]
+
+/**
+ * La situación, en la voz de instrumento de la fila de ubicación.
+ *
+ * Los años se cuentan al generar el sitio sumando tramos de `work` —ver
+ * `cvStats.ts`—, así que no hay una cifra escrita a mano que envejezca.
+ */
+const years = experienceYears(cv.work)
+const statusFacts = [
+  localized(HERO_STATUS, locale),
+  t(locale, years === 1 ? "heroYear" : "heroYears").replace(
+    "{n}",
+    String(years),
+  ),
+]
+---
+
+<Section id={sectionId("hero")}>
+  <div class="hero">
+    <div class="info">
+      {
+        /* `aria-hidden` y `no-print`: el nombre y la ubicación ya dicen esto en
+           texto, y deletrear «I E M» a quien escucha la página es ruido. En
+           papel un CV no lleva serigrafía. */
+      }
+      <p class="callsign label-mono no-print" aria-hidden="true">{callsign}</p>
+      <h1>
+        <span class="given-name">{givenName}</span>
+        {" "}
+        {familyName && <span class="family-name">{familyName}</span>}
+      </h1>
+      {
+        /* El titular no es un encabezado de sección: como `<h2>` se colaba en
+           el esquema junto a «Sobre mí», «Experiencia laboral» y los demás. */
+      }
+      <p class="headline signal-text">{localized(label, locale)}</p>
+      {
+        /* Qué hace, en una frase. Es el `tagline` de `cv.json`, el mismo que
+           firma la `description` de la página: hasta el 06-10-2026 lo leían
+           los buscadores y no quien llegaba. */
+      }
+      <p class="tagline">{localized(basics.tagline, locale)}</p>
+      {
+        /* Leído como una lectura de instrumento y no como una frase: el código
+           de país entre corchetes, y el resto en versalitas mono. Es el mismo
+           dato de siempre —`location` de `cv.json`—, sólo que con la voz del
+           resto de etiquetas del sitio. */
+      }
+      <span class="location signal-text">
+        <WorldMap />
+        <b class="country">[{countryCode}]</b>
+        <span>{city} · {localized(region, locale)}</span>
+      </span>
+      {
+        /* La situación y los años, con la misma voz de instrumento que la fila
+           de arriba. `no-print`: en papel el CV no dice si escucha propuestas,
+           y la cifra ya la da la experiencia. Los separadores los pone el CSS
+           con texto alternativo vacío, para que no se lean en voz alta. */
+      }
+      <p class="hero-status no-print">
+        {statusFacts.map((fact) => <span>{fact}</span>)}
+      </p>
+      <footer class="print print-contact">
+        {
+          printLinks.map(({ href, text }, index) => (
+            <>
+              {index > 0 && <span aria-hidden="true"> • </span>}
+              <a href={href}>{text}</a>
+            </>
+          ))
+        }
+      </footer>
+      {
+        /**
+         * Las dos acciones que busca quien contrata, delante de los puertos.
+         *
+         * Hasta el 06-10-2026 el PDF era un icono sin texto entre cinco en la
+         * barra y el único botón con texto del primer pantallazo llevaba a los
+         * servicios para negocios. Ahora el CV y el contacto se leen sin
+         * adivinar nada, y el banner de negocios baja tras Proyectos.
+         *
+         * Una sola fila con los puertos y no dos: en escritorio caben los seis
+         * a lo ancho de la columna, y en estrecho los puertos bajan solos a la
+         * línea siguiente por el `flex-wrap`. El `href` y el `download` del PDF
+         * son los de `PdfButton.astro`; «Escríbeme» baja al formulario.
+         */
+      }
+      <div class="actions no-print">
+        <a class="cta" href={localizedPath(locale, "/cv.pdf")} download>
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            width="17"
+            height="17"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.9"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"
+            ></path>
+            <path d="M14 3v5h5"></path>
+            <path d="M12 12v5"></path>
+            <path d="m9.5 14.5 2.5 2.5 2.5-2.5"></path>
+          </svg>
+          {t(locale, "heroDownloadCv")}
+        </a>
+        <a class="bracket-link" href={`#${CLOSING_SECTION_ID}`}>
+          <span class="bracket-link__bracket" aria-hidden="true">[</span>
+          {t(locale, "heroWriteMe")}
+          <span class="bracket-link__bracket" aria-hidden="true">]</span>
+        </a>
+        <footer
+          class="contact-list no-print"
+          aria-label={t(locale, "contactAndSocial")}
+          data-copied={t(locale, "emailCopied")}
+          data-copy-failed={t(locale, "emailCopyFailed")}
+        >
+          {
+            email && (
+              <a
+                href={`mailto:${email}`}
+                data-network="Email"
+                data-contact-copy={email}
+                title={`${t(locale, "emailTitle")} ${name}: ${email}`}
+              >
+                <span class="contact-icon" aria-hidden="true">
+                  <Mail />
+                </span>
+                <span class="sr-only">{t(locale, "email")}</span>
+              </a>
+            )
+          }
+          {
+            /* Sin `phone` en `cv.json` el chip no se pinta: el enlace no existe,
+             así que no hay nada que enseñar. */
+            phone && (
+              <a
+                href={whatsappUrl(phone, t(locale, "whatsappText"))}
+                data-network="WhatsApp"
+                title={`${t(locale, "whatsappTitle")} ${name}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span class="contact-icon" aria-hidden="true">
+                  <WhatsApp />
+                </span>
+                <span class="sr-only">{t(locale, "whatsapp")}</span>
+              </a>
+            )
+          }
+          {
+            profiles.map(({ network, url }) => {
+              // Sin icono el enlace sigue saliendo, solo con texto: igual que las
+              // tecnologías en `TECH_ICONS`. Antes se descartaba el perfil entero,
+              // así que añadir una red nueva a `cv.json` la dejaba invisible.
+              const Icon = SOCIAL_ICONS[network]
+
+              return (
+                <a
+                  href={url}
+                  data-network={network}
+                  title={`${t(locale, "profileTitle")} ${name} · ${network}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {Icon && (
+                    <span class="contact-icon" aria-hidden="true">
+                      <Icon />
+                    </span>
+                  )}
+                  <span class="sr-only">{network}</span>
+                </a>
+              )
+            })
+          }
+          {
+            /**
+             * El acuse del portapapeles, en la propia fila.
+             *
+             * `aria-live="polite"`: quien escucha la página necesita saber que se
+             * ha copiado, y es la única manera —el enlace no cambia de nombre—.
+             * Sale vacío, así que no ocupa sitio hasta que dice algo; el `:empty`
+             * del CSS se encarga.
+             */
+          }
+          <span
+            class="contact-feedback"
+            data-contact-feedback
+            aria-live="polite"></span>
+        </footer>
+      </div>
+    </div>
+    <figure class="portrait" data-portrait>
+      {
+        /* `quality` a 80 y no 94: la variante 3× pesaba 107 KB y va con
+          `fetchpriority=high`; en un retrato de 240 px no se aprecia. */
+      }
+      <picture>
+        {
+          /* Las dos fuentes oscuras llevan `data-portrait-source`: el tema
+             forzado a mano tiene que alcanzar a las dos, y el `<img>` va detrás
+             de todas para que el guion de `Layout.astro` sepa cuándo ha
+             llegado la última. */
+        }
+        <source
+          media="(prefers-color-scheme: dark)"
+          type="image/avif"
+          srcset={portraits.darkAvif}
+          data-portrait-source
+        />
+        <source
+          media="(prefers-color-scheme: dark)"
+          type="image/webp"
+          srcset={portraits.darkWebp}
+          data-portrait-source
+        />
+        <source type="image/avif" srcset={portraits.lightAvif} />
+        <img
+          class="portrait-image"
+          src={portraits.lightWebp.src}
+          srcset={portraits.lightWebp.srcSet}
+          alt={name}
+          width={240}
+          height={300}
+          loading="eager"
+          decoding="sync"
+          fetchpriority="high"
+        />
+      </picture>
+      {
+        /**
+         * El disparador del visor.
+         *
+         * Botón de verdad y transparente, no un oyente sobre la `<figure>`: si
+         * el gesto existe con el puntero tiene que existir con el tabulador, y
+         * un `<figure>` con `tabindex` es un control inventado que ningún lector
+         * anuncia como tal.
+         *
+         * Sin `title`: el `title` lo enseña el navegador al posarse encima, y
+         * eso delataría el gesto al primer roce del ratón. La etiqueta
+         * accesible sí está —es obligatoria— y por eso habla del visor y no de
+         * la página que hay detrás.
+         */
+      }
+      <button
+        class="portrait-focus"
+        type="button"
+        data-portrait-focus-trigger
+        aria-label={t(locale, "portraitFocus")}></button>
+    </figure>
+  </div>
+</Section>
+
+<style>
+  .hero {
+    align-items: center;
+    display: grid;
+    gap: clamp(2rem, 6vw, 4.5rem);
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-top: clamp(1rem, 4vw, 2.75rem);
+    position: relative;
+  }
+
+  /**
+   * El retrato se ancla arriba, y no se centra con la columna de al lado.
+   *
+   * Con `align-items: center` heredado de la rejilla, la foto se recolocaba
+   * cada vez que crecía la columna de texto: al añadir la barra de pregunta se
+   * desplazó de donde llevaba meses, y volvía a moverse con cada respuesta,
+   * porque la caja crecía hasta 22 rem. La barra ya no está —el asistente vive
+   * en un panel que no ocupa sitio, ver `AskDock.astro`—, pero el retrato no
+   * puede depender de eso: cualquier cosa que mañana crezca a su izquierda
+   * volvería a moverlo.
+   *
+   * `align-self: start` lo cuelga del canto superior de la rejilla, que no
+   * cambia nunca. El margen es lo que conserva su posición óptica: alineado a
+   * ras del titular quedaba demasiado alto, y el nombre necesita aire por
+   * encima que la foto no necesita.
+   *
+   * El texto sigue centrado: `align-items` de la rejilla vale para él, que es
+   * quien decide el alto de la fila.
+   */
+  .portrait {
+    align-self: start;
+    margin-block-start: clamp(0.5rem, 3vw, 2.25rem);
+  }
+
+  /**
+   * La capa de tubo: líneas de barrido sobre la primera pantalla.
+   *
+   * Es el gesto retro de la portada y sólo vive aquí. Un patrón de 3 px —una
+   * línea de tinta y dos de nada— sobre toda la caja del hero, a una opacidad
+   * muy baja: lo justo para que la superficie tenga textura de pantalla y no
+   * para que se lea como un enrejado encima del texto.
+   *
+   * ## Las tres puertas de salida
+   *
+   * Es el efecto del sitio con más posibilidades de molestar, así que se apaga
+   * solo en los tres casos en los que sobra:
+   *
+   * - `prefers-contrast: more`: unas rayas encima del texto es justo lo que no
+   *   quiere quien pide más contraste.
+   * - `prefers-reduced-transparency: reduce`: es una capa translúcida, la misma
+   *   familia que el cristal de la barra.
+   * - `@media print`: en papel no hay tubo, y el patrón se comería tinta en cada
+   *   copia.
+   *
+   * `z-index: 1` y no `-1`: con negativo la capa se iba detrás del fondo de la
+   * sección y no se veía. `pointer-events: none` la deja fuera del camino de
+   * los chips y del retrato.
+   */
+  .hero::before {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      var(--text) 0 1px,
+      transparent 1px 3px
+    );
+    content: "";
+    inset: 0;
+    opacity: 0.035;
+    pointer-events: none;
+    position: absolute;
+    z-index: 1;
+  }
+
+  /**
+   * La deriva.
+   *
+   * El patrón se mueve tres píxeles —un ciclo entero— en doce segundos, así que
+   * es imperceptible fotograma a fotograma y sólo se nota como que la superficie
+   * está viva. Se anima `translate` sobre una caja más alta que la sección, no
+   * `background-position`: mover la caja lo resuelve el compositor, mover el
+   * fondo obliga a repintar el hero en cada fotograma.
+   *
+   * Es el mismo recurso que la banda que disuelve el retrato, unas líneas más
+   * abajo.
+   */
+  @media screen and (prefers-reduced-motion: no-preference) {
+    .hero::before {
+      animation: hero-scanlines 12s linear infinite;
+      inset-block: -3px 0;
+    }
+  }
+
+  @keyframes hero-scanlines {
+    to {
+      translate: 0 3px;
+    }
+  }
+
+  @media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+    .hero::before {
+      display: none;
+    }
+  }
+
+  .info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    min-width: 0;
+  }
+
+  h1 {
+    color: var(--text);
+    font-family: var(--font-name);
+    font-size: clamp(2.6rem, 6.8vw, 4.35rem);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 0.98;
+    text-wrap: balance;
+    width: fit-content;
+  }
+
+  /**
+   * El nombre va en Space Grotesk, y entero.
+   *
+   * Pasó por Doto —ilegible a 43-72 px, los puntos pesaban más que las letras—
+   * y por Inter, que es la grotesca de todo el sitio y por eso mismo no decía
+   * nada aquí: el elemento que más se mira de la página iba con la misma voz
+   * que un párrafo. Space Grotesk es de Colophon, la fundición de las tipos de
+   * Nothing, así que aporta el gesto sin salirse del sistema. El peso baja de
+   * 800 a 700 porque es el único que se sirve, y el interletraje se afloja de
+   * -0,06 a -0,035 em: viene ya bastante más compensada que Inter y a -0,06 las
+   * mayúsculas se tocaban.
+   *
+   * La fuente de puntos sigue en el proyecto para lo suyo —las cifras de
+   * `DateRange`, el ordinal de sección y el código del 404, por
+   * `--font-display`—, y el papel no ve ninguna de las dos: el `@media print`
+   * de más abajo devuelve el `h1` a Inter.
+   */
+  h1 > span {
+    display: block;
+  }
+
+  /**
+   * Nombre y apellidos, una sola voz.
+   *
+   * El apellido iba hueco con `-webkit-text-stroke` y el nombre de pila sólido.
+   * Partía en dos lo que se lee como un bloque, y encima ataba el gesto a una
+   * propiedad que sólo existe prefijada: si fallaba, el respaldo era
+   * `color: transparent`, o sea medio nombre invisible.
+   *
+   * Ahora el contraste lo pone la tipografía —Space Grotesk contra la Inter de
+   * todo lo demás— y no un tratamiento distinto por línea, que es un gesto
+   * menos y el mismo efecto. Queda el `nowrap`: el apellido no necesita
+   * partirse a ningún ancho de los que se dan.
+   */
+  .family-name {
+    white-space: nowrap;
+  }
+
+  /* Serigrafía de aparato: el tono más apagado de la escala y pegada al nombre
+     —4 px—, que es lo que la hace leer como una marca impresa encima y no como
+     una línea de texto más. */
+  .callsign {
+    color: var(--text-faint);
+    margin-bottom: 0.25rem;
+  }
+
+  /**
+   * El barrido de columnas del titular.
+   *
+   * Una máscara del doble de ancho que la caja, con la mitad izquierda opaca,
+   * que entra desde la derecha: al principio la parte opaca cae entera fuera del
+   * elemento y al final lo cubre. En `steps(24)` no se desliza, avanza a
+   * saltos —veinticuatro columnas—, que es la lectura de matriz que se busca y
+   * no un fundido.
+   *
+   * Se anima `mask-position` sobre una máscara sobredimensionada y no un tamaño
+   * ni una variable: sin `@property` una variable no interpola, y es el mismo
+   * recurso que ya mueve la tira del panel de servicios.
+   *
+   * El estado de reposo es **visible** (`mask-position` vale 0 % por defecto):
+   * si la animación no llega a correr, el titular está ahí. Es la regla de la
+   * casa —nunca un `opacity: 0` inicial en CSS— dicha con máscaras.
+   *
+   * Por eso también sale de la entrada escalonada de `PortfolioRuntime.astro`
+   * (`revealSequence`): dos entradas encima se ven como dos entradas.
+   *
+   * ## Las dos animaciones van en la misma lista, y no es opcional
+   *
+   * El titular lleva `signal-text`, y esa clase declara el atajo
+   * `animation: signal-ghost-loop 9s steps(1, end) infinite` en `Layout.astro`.
+   * Con Astro 5 el ámbito de componente se escribe con `:where()`, que no suma
+   * especificidad, así que las dos reglas empatan y sólo decide el orden: las
+   * propiedades sueltas de aquí ganan una a una, pero **las que no se escriban
+   * las sigue poniendo el atajo**. La primera versión declaraba nombre,
+   * duración, curva y relleno y se dejaba `animation-iteration-count`: heredaba
+   * el `infinite` del glitch y el barrido se repetía en bucle —el titular
+   * aparecía y desaparecía cada 900 ms—.
+   *
+   * Declararlo todo y con las dos animaciones en lista resuelve las dos cosas a
+   * la vez: la ráfaga sigue en bucle por `text-shadow` y el barrido corre una
+   * sola vez por `mask`. Si algún día el orden del bundle cambiara y ganara el
+   * atajo, lo que se pierde es el barrido y no el texto: sin animación la
+   * máscara se queda en su `0%` de reposo, que es la posición visible.
+   */
+  @media screen and (prefers-reduced-motion: no-preference) {
+    .headline {
+      mask-image: linear-gradient(to right, #000 0 50%, transparent 50%);
+      mask-repeat: no-repeat;
+      mask-size: 200% 100%;
+      animation-name: signal-ghost-loop, headline-matrix;
+      animation-duration: 9s, 900ms;
+      animation-timing-function: steps(1, end), steps(24, end);
+      animation-iteration-count: infinite, 1;
+      animation-delay: 0s, 0s;
+      animation-fill-mode: none, both;
+    }
+  }
+
+  @keyframes headline-matrix {
+    from {
+      mask-position: 100% 0;
+    }
+
+    to {
+      mask-position: 0% 0;
+    }
+  }
+
+  .headline {
+    color: var(--headline-ink);
+    font-family: inherit;
+    font-size: clamp(1.05rem, 2vw, 1.25rem);
+    font-weight: 500;
+    letter-spacing: -0.018em;
+    line-height: 1.45;
+    margin: 0;
+    max-width: 48ch;
+    text-wrap: pretty;
+  }
+
+  /* Qué hace, en una frase: cuerpo de lectura y tono apagado, para que el
+     titular siga mandando en la columna. */
+  .tagline {
+    color: var(--text-muted);
+    font-size: clamp(0.95rem, 1.6vw, 1.02rem);
+    line-height: 1.6;
+    margin: 0;
+    max-width: 52ch;
+    text-wrap: pretty;
+  }
+
+  /**
+   * El retrato: esquina recta y las escuadras **fuera** de la foto.
+   *
+   * Tenía 1,5 rem de radio, que es el lenguaje que el resto del sitio ya
+   * abandonó —las tarjetas y los chips van al chaflán, el conmutador de idioma
+   * al octógono—, así que una foto con la esquina redondeada se leía como la
+   * pieza de otra maqueta. En recto la foto es lo que enseña un visor.
+   *
+   * ## El marco es un borde transparente, no un elemento
+   *
+   * Las cuatro escuadras van de fondo de la propia caja, no en un
+   * pseudoelemento: uno posicionado se mide contra la caja de relleno y lo
+   * recorta el `overflow: hidden` que pide la banda de disolución, así que ahí
+   * dentro no hay manera de salirse de la foto. El borde sí está fuera:
+   * `border: var(--gutter) solid transparent` abre un anillo alrededor de la
+   * imagen y `background-origin: border-box` lleva los degradados a pintarse en
+   * él. Los fondos no los recorta `overflow`, así que las escuadras quedan
+   * enteras y por fuera. Cero nodos, que es lo que costaría un envoltorio.
+   *
+   * Ocho degradados planos, la receta que llevaban las tarjetas de proyecto
+   * antes de pasar a copiar la esquina achaflanada de su caja. Aquí el ángulo
+   * recto **es** la forma de la esquina, así que vuelve a su sitio.
+   *
+   * ## Las tres cosas que el borde transparente recoloca
+   *
+   * - **El filete.** Era `border: 1px solid` y ahora el borde lo ocupa el
+   *   anillo, así que pasa a `box-shadow` hacia dentro: se mide contra la caja
+   *   de relleno, que sin relleno es exactamente el canto de la imagen.
+   * - **El tinte de espera.** `background-color` se recorta según la última capa
+   *   y la última capa es una escuadra, así que teñiría el anillo entero. Va
+   *   como novena capa de imagen —un degradado plano— recortada a
+   *   `content-box`, o sea justo detrás de la foto. Es lo que se ve mientras
+   *   carga y lo que imprime el CV.
+   * - **La banda de disolución.** Sigue igual, y ahora mejor: `overflow: hidden`
+   *   recorta a la caja de relleno, que con el borde transparente es la foto y
+   *   nada más. Antes llegaba hasta el filete.
+   *
+   * Fijas y no al pasar por encima: el retrato no responde al puntero —está
+   * escrito más abajo y es deliberado—, así que un encuadre que apareciera al
+   * acercarse prometería algo que no ocurre.
+   */
+  figure {
+    --gutter: 14px;
+    /**
+     * Nada detrás de la foto, en ningún medio.
+     *
+     * Estos dos existían para que el retrato fuera una caja: un tinte de acento
+     * detrás de la imagen mientras carga, y un filete de 1 px alrededor. Con el
+     * fondo recortado los dos estorban — el tinte se vería por todo lo que antes
+     * era fondo, y el filete cerraría un rectángulo alrededor de una cabeza que
+     * ya no lo tiene.
+     *
+     * Siguen siendo variables y no cero fijo porque las ocho capas de esquina
+     * comparten la lista de fondos: dejar la novena declarada y transparente
+     * cuesta menos que reescribir cinco listas de nueve entradas cada vez que
+     * esto se replantee.
+     */
+    --portrait-wash: transparent;
+    --portrait-frame: transparent;
+    --viewfinder-arm: 24px;
+    --wall: 3px;
+    aspect-ratio: 4 / 5;
+    background-clip:
+      border-box, border-box, border-box, border-box, border-box, border-box,
+      border-box, border-box, content-box;
+    background-image:
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--portrait-wash), var(--portrait-wash));
+    background-origin:
+      border-box, border-box, border-box, border-box, border-box, border-box,
+      border-box, border-box, content-box;
+    background-position:
+      left 0 top 0,
+      left 0 top 0,
+      right 0 top 0,
+      right 0 top 0,
+      left 0 bottom 0,
+      left 0 bottom 0,
+      right 0 bottom 0,
+      right 0 bottom 0,
+      left 0 top 0;
+    background-repeat: no-repeat;
+    background-size:
+      var(--viewfinder-arm) var(--wall),
+      var(--wall) var(--viewfinder-arm),
+      var(--viewfinder-arm) var(--wall),
+      var(--wall) var(--viewfinder-arm),
+      var(--viewfinder-arm) var(--wall),
+      var(--wall) var(--viewfinder-arm),
+      var(--viewfinder-arm) var(--wall),
+      var(--wall) var(--viewfinder-arm),
+      auto;
+    border: var(--gutter) solid transparent;
+    box-shadow: inset 0 0 0 1px var(--portrait-frame);
+    flex-shrink: 0;
+    overflow: hidden;
+    /* Ancla la banda de disolución de más abajo y el botón del visor; el recorte
+       lo da `overflow: hidden`. */
+    position: relative;
+    transition:
+      --viewfinder-arm 900ms linear,
+      filter 220ms ease;
+    width: clamp(13.75rem, 24vw, 16rem);
+  }
+
+  /**
+   * Hacer foco con el visor.
+   *
+   * Manteniendo pulsado sobre el retrato, las cuatro escuadras crecen hasta
+   * cerrarse sobre la foto; al completarse el recorrido quedan encendidas en
+   * acento. Es el gesto de un visor haciendo foco, y es la única puerta a la
+   * página «Sobre mí»: `About.astro` no enseña su enlace hasta que esto ocurre
+   * una vez. El JS está en `PortfolioRuntime.astro`.
+   *
+   * ## Se anima el brazo, no el borde
+   *
+   * Lo que crece es `--viewfinder-arm`, que sólo entra en `background-size`. El otro
+   * candidato era `--gutter`, pero va en `border-width` y con
+   * `box-sizing: border-box` —global, en `Layout.astro`— estrechar el anillo
+   * ensancharía la foto: el gesto acabaría reencuadrando el retrato, que es
+   * justo lo que un visor no hace.
+   *
+   * ## Y por eso `--viewfinder-arm` va registrada
+   *
+   * Una propiedad personalizada sin `@property` no interpola: pasa de un valor
+   * al otro de golpe a mitad de la transición. Registrada como `<length>`, el
+   * navegador sabe que 24 px y 46 px son medidas y las recorre. Es la misma
+   * nota que ya está escrita más arriba, en el barrido del titular.
+   *
+   * ## Y por eso lleva un nombre largo
+   *
+   * `@property` **no se ámbita**: aunque esta hoja sea de este componente, la
+   * declaración registra el nombre en todo el documento. Se llamaba `--arm`, que
+   * es también como llama la tarjeta de proyecto a lo suyo, y con
+   * `inherits: false` el registro ganaba: el `::after` de la tarjeta dejaba de
+   * heredar su propio valor y caía al `initial-value` de aquí, o sea al brazo
+   * del retrato. Dos componentes sin relación compartiendo un nombre global.
+   */
+  @property --viewfinder-arm {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 24px;
+  }
+
+  figure[data-portrait-focus] {
+    --viewfinder-arm: 46px;
+  }
+
+  figure[data-portrait-focus="locked"] {
+    filter: var(--glow-hover-filter);
+  }
+
+  /**
+   * El botón que recibe el gesto.
+   *
+   * Cubre la foto y nada más —`inset: 0` se mide contra la caja de relleno, que
+   * con el anillo transparente es exactamente la imagen—, así que las escuadras
+   * quedan fuera de su área: se pulsa la foto, no el marco.
+   *
+   * Invisible a propósito, y sin `cursor: pointer`: el puntero cambiando de
+   * forma al pasar por encima anunciaría que aquí hay algo, y no lo hay hasta
+   * que alguien insiste. El foco sí se ve —es la única manera de que exista para
+   * quien navega con teclado—, y se dibuja hacia dentro para no pisar las
+   * escuadras.
+   */
+  .portrait-focus {
+    background: none;
+    border: 0;
+    inset: 0;
+    padding: 0;
+    position: absolute;
+    /**
+     * Las cuatro que hacen que el gesto llegue a completarse en un teléfono.
+     *
+     * `-webkit-touch-callout` es la que cierra el caso en iOS: sin ella, aguantar
+     * el dedo sobre la foto levanta la hoja de «Guardar imagen» a los ~500 ms y
+     * el puntero se cancela mucho antes de los 900. Android va por `contextmenu`
+     * y se ataja en `portraitFocus.ts`. `user-select` quita la selección azul que
+     * salía debajo, `-webkit-user-drag` el arrastre de la imagen en escritorio, y
+     * `touch-action` impide que el navegador se lleve el gesto como scroll — que
+     * es lo que pasa si el dedo tiembla un píxel mientras aguanta.
+     */
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
+    touch-action: none;
+    user-select: none;
+    /* Por encima del marco, que se pinta con los fondos de la `<figure>`. */
+    z-index: 1;
+  }
+
+  .portrait-focus:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -4px;
+  }
+
+  /**
+   * Sin movimiento, el gesto sigue existiendo.
+   *
+   * No se acorta la espera ni se anima el brazo: las escuadras aparecen ya
+   * cerradas cuando el recorrido se completa. Quien pide menos movimiento pide
+   * eso, no la misma animación más rápida —la regla del skill
+   * `motion-animations`—, y el hallazgo no puede depender de una transición que
+   * no va a correr.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    figure {
+      transition: none;
+    }
+  }
+
+  @media print {
+    .portrait-focus {
+      display: none;
+    }
+  }
+
+  /**
+   * Aquí vivía la banda que deshacía el retrato.
+   *
+   * Una tira recorría la foto de arriba abajo y dentro de ella la imagen se
+   * veía perforada en una rejilla de puntos del color del fondo. Se ha ido a
+   * petición: es la única animación del sitio que corre en bucle sobre una
+   * cara, y una cara que se deshace sola cada nueve segundos pide atención en
+   * el sitio donde menos falta hace.
+   *
+   * Lo que se queda es el marco: las cuatro escuadras y el gesto de mantener
+   * pulsado que las cierra, que responden a alguien en vez de moverse solas.
+   */
+  /**
+   * El retrato **no** responde al puntero, y es deliberado.
+   *
+   * Aquí había una pérdida de señal al pasar por encima: la banda se aceleraba
+   * a tirones y la foto se descuadraba con `signal-desync`. Se ha quitado
+   * porque ahora la ráfaga de `signal-ghost-loop` corre sola en el titular, en
+   * la ubicación y en el banner de servicios (ver `Layout.astro`), y tener
+   * además la foto rompiéndose al pasar por encima era el mismo efecto contado
+   * cuatro veces en la misma pantalla.
+   *
+   * Lo que se queda es la banda de puntos en reposo, que es de lo que va la
+   * portada: el retrato se deshace y se rehace solo, sin que nadie lo toque.
+   */
+  /**
+   * Sin fondo, y el recorte no lo hace el CSS.
+   *
+   * El alfa del fichero suaviza los extremos de los hombros y la base de la
+   * camiseta. Las dos variantes comparten el rostro y la transparencia; solo
+   * cambia la camiseta: blanca en claro y antracita en oscuro.
+   * El ajuste `cover`, centrado,
+   * recupera el tamaño anterior de la cara y recorta parte de los hombros.
+   *
+   * En color y no en gris: es un retrato de una persona en una página que ya es
+   * monocroma, y con el fondo fuera la piel es lo único que trae color al hero.
+   * El acento sigue siendo suceso —lo ponen las cuatro escuadras y la banda de
+   * puntos—, así que teñir la cara además sería repetirlo.
+   */
+  /* El `<picture>` no pinta: es el envoltorio que el `<source>` necesita. Sin
+     `display: contents` metería una caja en línea entre la `<figure>` y la
+     imagen, y el `height: 100%` de abajo dejaría de referirse a la figura. */
+  .portrait picture {
+    display: contents;
+  }
+
+  .portrait-image {
+    /* El botón del visor va encima y ya las lleva, pero el callout lo decide el
+       navegador sobre la imagen y hay motores que miran por debajo del elemento
+       que recibe el toque. Aquí no cuesta nada y cierra el hueco. */
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
+    aspect-ratio: 4 / 5;
+    display: block;
+    height: 100%;
+    image-rendering: auto;
+    object-fit: cover;
+    object-position: center;
+    user-select: none;
+    width: 100%;
+  }
+
+  /* Etiqueta de instrumento, no una frase: versalitas y tracking positivo, el
+     mismo criterio que `.label-mono`. Aquí no se usa esa clase porque el cuerpo
+     es mayor —11 px al lado del retrato se pierde— y el icono pide alinearse. */
+  .location {
+    align-items: center;
+    color: var(--text-muted);
+    display: flex;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    gap: 0.4rem;
+    letter-spacing: 0.04em;
+    margin-top: 0.15rem;
+    text-transform: uppercase;
+  }
+
+  /* El código de país es el dato más pequeño de la fila y el único entre
+     corchetes: marca dónde empieza la lectura sin gritar. */
+  .country {
+    color: var(--text-faint);
+    font-weight: 400;
+  }
+
+  /**
+   * La situación: la fila de ubicación, con piloto.
+   *
+   * El punto es el verde de «en línea» de las insignias de proyecto
+   * (`--status-published`): el mismo color dice lo mismo en todo el sitio. Fijo
+   * y no latiendo, porque una animación perpetua en el primer pantallazo es
+   * justo lo que se quitó del banner de servicios.
+   */
+  .hero-status {
+    align-items: center;
+    color: var(--text);
+    display: flex;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    margin: 0;
+    row-gap: 0.15rem;
+    text-transform: uppercase;
+  }
+
+  /* El piloto va en la primera frase y no en la fila: en estrecho las dos
+     frases se apilan, y un punto suelto en su propio renglón se leería como un
+     adorno y no como el estado de lo que dice al lado. */
+  .hero-status span:first-child::before {
+    background: var(--status-published);
+    border-radius: 50%;
+    content: "";
+    display: inline-block;
+    height: 0.5rem;
+    margin-inline-end: 0.55rem;
+    vertical-align: 0.05em;
+    width: 0.5rem;
+  }
+
+  /* Dos declaraciones a propósito: la segunda da texto alternativo vacío para
+     que el punto medio no se lea en voz alta, y donde no se entienda se queda
+     la primera, que al menos se ve. */
+  .hero-status span + span::before {
+    color: var(--text-faint);
+    content: "·";
+    content: "·" / "";
+    margin-inline: 0.5em;
+  }
+
+  /* CTA, enlace entre corchetes y puertos en una sola fila que se parte sola.
+     El margen lo pone la fila y no los puertos, que ya no son lo primero. */
+  .actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+  }
+
+  .contact-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /**
+   * Cuatro puertos de un aparato. En reposo iguales; al responder, cada uno del
+   * color de lo suyo.
+   *
+   * Aquí hubo un color de marca por red y se quitó entero. Los motivos de
+   * entonces eran buenos y ninguno era «el color de marca está mal»:
+   *
+   * - **Estaban encendidos siempre.** Cuatro marcas a todo color de continuo
+   *   convertían la fila en el sitio más ruidoso de la portada. Ahora el reposo
+   *   es monocromo —`--surface`, `--border`, `--text`, como cualquier control
+   *   del sitio— y la marca sólo aparece al responder. El color vuelve a ser un
+   *   suceso, que es la regla del sistema.
+   * - **El modo de alto contraste no las apagaba.** `--brand` se le escapaba.
+   *   Ahora el bloque de `prefers-contrast: more` de más abajo devuelve los
+   *   cuatro a `--accent`: donde se pide contraste no caben cuatro tintes.
+   * - **Nadie las medía.** Siguen sin pasar por `contrast.test.ts`, y por eso
+   *   no tocan texto: el color va al icono, al filete y al piloto, nunca a una
+   *   letra. Lo que sí se ha corregido es el motivo real por el que el negro de
+   *   GitHub y el rojo de Gmail no valían: se los tragaba el fondo oscuro. Cada
+   *   marca lleva ahora su par con `light-dark()`, la versión oscura aclarada
+   *   hasta despegarse de `--bg`.
+   *
+   * El radio baja de 10 px a 4, el de todos los controles del sitio, y el
+   * chaflán entra desde el bloque global de `Layout.astro`.
+   *
+   * Y el nombre de la red se ha ido de la vista: el chip es una celda cuadrada
+   * de 44 px con el icono centrado, cuatro puertos idénticos en vez de cuatro
+   * botones de anchos distintos. El texto sigue en el marcado con `.sr-only`
+   * —es el nombre accesible del enlace, no un adorno— y el `title` lo dice al
+   * ratón. Las marcas de GitHub, LinkedIn y WhatsApp son inconfundibles a 16 px
+   * y el sobre del correo también; repetirlas en versalitas era decir dos veces
+   * lo mismo en la fila más ancha de la portada.
+   */
+  .contact-list a {
+    /* El respaldo es el acento: una red nueva en `cv.json` sin par de marca
+       aquí se enciende como se encendía todo hasta ahora, no en gris. */
+    --brand: var(--accent);
+    /* La misma receta de tres capas que `--glow-hover`, con la marca en lugar
+       del acento. No se puede reutilizar el token: `var()` dentro de una
+       propiedad personalizada se sustituye donde se **declara**, y `--glow-hover`
+       se declara en `:root`, donde `--brand` no existe. */
+    --glow-brand:
+      0 0 0 1px color-mix(in srgb, var(--brand) 60%, transparent),
+      0 0 12px -1px color-mix(in srgb, var(--brand) 62%, transparent),
+      0 0 26px 2px color-mix(in srgb, var(--brand) 30%, transparent);
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    display: inline-flex;
+    inline-size: 44px;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0;
+    /* Ancla del piloto, que ahora va en la esquina y no en la fila. */
+    position: relative;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.22s ease,
+      color 0.2s ease,
+      scale var(--tick),
+      transform 0.2s ease;
+  }
+
+  /**
+   * El piloto del puerto.
+   *
+   * Un punto de 4 px en la esquina del chip, apagado al tono del filete y
+   * encendido en acento cuando responde. Es el mismo recurso que la insignia de
+   * estado y el medidor de idiomas —una luz que dice si algo está vivo— y no
+   * cuesta un solo nodo: es el `::before` del propio enlace.
+   *
+   * Iba en línea, delante del nombre de la red. Al quedarse el chip sin texto
+   * el enlace es una celda cuadrada de 44 px con el icono centrado, así que el
+   * piloto sube a la esquina: es donde lo lleva un aparato y es lo único que
+   * cabe sin desplazar el icono del centro.
+   */
+  .contact-list a::before {
+    background: var(--border-hover);
+    border-radius: 999px;
+    block-size: 4px;
+    content: "";
+    inline-size: 4px;
+    inset-block-start: 4px;
+    inset-inline-end: 4px;
+    position: absolute;
+    transition:
+      background-color 0.2s ease,
+      box-shadow 0.22s ease;
+  }
+
+  /**
+   * El color de cada puerto.
+   *
+   * El gancho es el `data-network` que ya viajaba en el marcado sin que lo usara
+   * nadie; los dos primeros salen de `cv.json` (`basics.profiles[].network`) y
+   * los otros dos los pone este componente.
+   *
+   * Cada par es marca en claro y marca aclarada en oscuro. El negro de GitHub
+   * sobre `#0d100e` y el rojo `#c5221f` de Gmail son exactamente los dos que
+   * desaparecían, así que en oscuro van al blanco azulado del propio GitHub y a
+   * un rojo lavado que sí despega del fondo.
+   */
+  .contact-list a[data-network="WhatsApp"] {
+    --brand: light-dark(#1da851, #25d366);
+  }
+
+  .contact-list a[data-network="LinkedIn"] {
+    --brand: light-dark(#0a66c2, #4aa3e8);
+  }
+
+  .contact-list a[data-network="Email"] {
+    --brand: light-dark(#c5221f, #ea6357);
+  }
+
+  .contact-list a[data-network="GitHub"] {
+    --brand: light-dark(#181717, #f0f6fc);
+  }
+
+  /* El mismo chasquido que los controles de la barra. */
+  .contact-list a:active {
+    scale: 0.97;
+  }
+
+  /**
+   * El acuse del portapapeles, dentro de la fila.
+   *
+   * `:empty` y no una clase que se quita: el guion escribe texto o lo borra, y
+   * el CSS decide solo si hay algo que enseñar. Así el hueco no existe mientras
+   * no diga nada y la fila no se mueve al aparecer.
+   *
+   * `align-self: center` porque la fila mide 44 px por los chips y esto es una
+   * línea de texto: sin él se pegaría arriba.
+   */
+  .contact-feedback:not(:empty) {
+    align-self: center;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: var(--label-size);
+    font-weight: 700;
+    letter-spacing: var(--label-tracking);
+    text-transform: uppercase;
+  }
+
+  /* Los corchetes van aquí y no en el diccionario: son el lenguaje del sitio
+     —`[ES]`, `[ IEM ]`, `[ LEER SOBRE MÍ ]`— y no palabras que alguien deba oír
+     deletreadas al escuchar la página. */
+  .contact-feedback:not(:empty)::before {
+    content: "[";
+    margin-inline-end: 0.25em;
+  }
+
+  .contact-feedback:not(:empty)::after {
+    content: "]";
+    margin-inline-start: 0.25em;
+  }
+
+  .contact-feedback[data-kind="error"] {
+    color: var(--warning);
+  }
+
+  /* El foco enciende lo mismo que el puntero: quien navega con el tabulador ve
+     el color de la red igual que quien pasa por encima. */
+  .contact-list a:focus-visible {
+    border-color: color-mix(in srgb, var(--brand) 55%, var(--border-hover));
+  }
+
+  .contact-list a:focus-visible::before {
+    background: var(--brand);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--brand) 45%, transparent);
+  }
+
+  .contact-list a:focus-visible .contact-icon {
+    color: var(--brand);
+  }
+
+  @media (hover: hover) {
+    .contact-list a:hover {
+      background: var(--surface-raised);
+      border-color: color-mix(in srgb, var(--brand) 55%, var(--border-hover));
+      box-shadow: var(--glow-brand);
+      transform: translateY(-1px);
+    }
+
+    .contact-list a:hover::before {
+      animation: port-ack 380ms ease-out;
+      background: var(--brand);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--brand) 45%, transparent);
+    }
+
+    /* El icono se tiñe de la marca: es la señal de que el chip está encendido, y
+       ahora es además lo único que hay dentro de la celda. Y crece un 8 %: con
+       la celda vacía de texto, el icono **es** el chip, así que es lo que tiene
+       que acusar el contacto. */
+    .contact-list a:hover .contact-icon {
+      color: var(--brand);
+      scale: 1.08;
+    }
+  }
+
+  /**
+   * Donde se pide contraste, un solo color.
+   *
+   * Los cuatro vuelven al acento —el que el resto del sitio ya usa para decir
+   * «esto responde»— y el halo se apaga desde el bloque global de
+   * `Layout.astro`, que pone `--glow-ink: transparent`. Cuatro tintes distintos
+   * son cuatro relaciones de contraste distintas que nadie mide, y eso es justo
+   * lo que este modo no admite.
+   */
+  @media (prefers-contrast: more) {
+    .contact-list a,
+    .contact-list a[data-network] {
+      --brand: var(--accent);
+      --glow-brand: none;
+    }
+  }
+
+  .contact-icon {
+    display: inline-flex;
+    transition:
+      color 0.2s ease,
+      scale 0.2s ease;
+  }
+
+  /**
+   * El acuse del puerto: un guiño, una vez.
+   *
+   * El piloto ya se enciende en el color de la marca al pasar por encima, pero
+   * se encendía y ya está. Un aparato que responde parpadea antes de quedarse
+   * fijo, y eso es lo que hace esta curva: baja al 20 % a un tercio del
+   * recorrido y vuelve. 380 ms, una sola pasada por entrada del puntero.
+   *
+   * Se anima `opacity` sobre un punto de 4 px: no repinta nada más.
+   */
+  @keyframes port-ack {
+    35% {
+      opacity: 0.2;
+    }
+  }
+
+  .contact-icon :global(svg),
+  .location :global(svg) {
+    flex: 0 0 auto;
+  }
+
+  .print-contact {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    overflow-wrap: anywhere;
+  }
+
+  @media (width <= 700px) {
+    .hero {
+      flex-direction: column-reverse;
+      display: flex;
+      gap: 1.75rem;
+      padding-top: 0.5rem;
+    }
+
+    .info {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    /**
+     * Apilado, el retrato cede sitio a las dos acciones.
+     *
+     * Estuvo en 11,5 rem fijos y se agrandó a `min(64vw, 16rem)` porque a 184 px
+     * la foto quedaba flotando en medio de un hueco: debajo sólo venían el
+     * nombre, el titular, la ubicación y los puertos. Desde el 06-10-2026 vienen
+     * además el `tagline`, la situación y los dos CTA, y con la foto a 250 px
+     * «Descargar CV» caía justo en el canto de un teléfono de 390×844, debajo
+     * del botón del asistente. El hueco ya no existe, así que la foto vuelve a
+     * su tamaño de retrato: la mitad del ancho con techo de 12,5 rem, o sea
+     * 160 px a 320 y 195 a 390.
+     *
+     * El techo sigue importando por lo mismo que antes: en la franja de 640 a
+     * 700 la mitad del ancho serían 350 px.
+     */
+    figure {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 0 auto;
+      width: min(50vw, 12.5rem);
+    }
+
+    /* El techo vuelve a 13vw ahora que el nombre es Inter: el recorte a 9,5
+       existía para que los apellidos en Doto cupieran a cuerpo completo, y con
+       una grotesca sobra sitio. */
+    h1 {
+      font-size: clamp(2.5rem, 13vw, 3.35rem);
+    }
+
+    .headline,
+    .tagline {
+      max-width: 34ch;
+      text-wrap: balance;
+    }
+
+    .actions,
+    .contact-list {
+      justify-content: center;
+    }
+
+    /* Apiladas y sin el punto medio: partida por el `wrap`, la segunda frase
+       empezaba el renglón con un «·» colgando. */
+    .hero-status {
+      flex-direction: column;
+    }
+
+    .hero-status span + span::before {
+      content: none;
+    }
+
+    /**
+     * La fila de ubicación se parte entre piezas, no dentro de una.
+     *
+     * Centrada y sin envolver, el `<span>` de la localidad y la región era un
+     * elemento flexible estrecho al lado del código de país: partía en dos
+     * líneas centradas por el `text-align` de `.info` y dejaba `[ES]` colgando
+     * solo a la izquierda, con un hueco en medio que parecía un error de
+     * maquetación. Se ve a 320 px, donde el nombre de la región ya no cabe.
+     *
+     * Envolviendo, lo que baja de línea es la pieza entera y las dos filas
+     * quedan centradas una debajo de otra, que es como se lee una etiqueta de
+     * instrumento en estrecho.
+     */
+    .location {
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+  }
+
+  /**
+   * El marco encoge sólo cuando la foto es pequeña de verdad.
+   *
+   * Esta pareja de valores existía para todo el móvil, con este motivo: a
+   * 168 px de ancho, 24 de brazo son casi un cuarto del lado y el marco deja
+   * de leerse como cuatro escuadras para leerse como un borde roto —y el
+   * anillo tiene que encoger con él, o se comería la foto—. Sigue siendo
+   * cierto, pero ya sólo por debajo de 480 px: ahí la foto baja de 200 px otra
+   * vez. De 480 para arriba mide 240 o más y aguanta el marco de siempre.
+   */
+  @media (width <= 480px) {
+    figure {
+      --viewfinder-arm: 16px;
+      --gutter: 10px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cta,
+    .contact-list a,
+    .contact-list a::before,
+    .contact-icon {
+      transition: none;
+    }
+
+    .contact-list a:active {
+      scale: 1;
+    }
+
+    .contact-list a:hover {
+      transform: none;
+    }
+
+    .contact-list a:hover::before {
+      animation: none;
+    }
+
+    .contact-list a:hover .contact-icon {
+      scale: 1;
+    }
+  }
+
+  @media print {
+    /* En papel no hay tubo: el patrón se comería tinta en cada copia. */
+    .hero::before {
+      display: none;
+    }
+
+    .hero {
+      gap: 1.5rem;
+      padding-top: 0;
+    }
+
+    .info {
+      gap: 0.35rem;
+    }
+
+    h1 {
+      font-size: 2.1rem;
+    }
+
+    /**
+     * En papel el nombre vuelve a Inter.
+     *
+     * No es estética: `scripts/check-cv-pdf.mjs` comprueba que el PDF sólo
+     * incrusta Inter y JetBrains Mono. Una tercera familia en la cabecera son
+     * subconjuntos de más en los tres archivos y una comprobación en rojo. Es
+     * la misma regla que ya cumple Doto.
+     */
+    h1 {
+      font-family: var(--font-sans);
+      font-weight: 800;
+      letter-spacing: -0.045em;
+    }
+
+    /* Puede partir: la cabecera del CV es más estrecha que la columna de la
+       portada y aquí vale más que quepa que que vaya en una sola línea. */
+    .family-name {
+      white-space: normal;
+    }
+
+    .headline {
+      font-size: 0.95rem;
+    }
+
+    .tagline {
+      font-size: 0.8rem;
+    }
+
+    /* Las versalitas son del instrumento de pantalla. En el CV la ubicación es
+       un dato más de la cabecera y se lee mejor en caja normal. */
+    .location {
+      font-size: 0.7rem;
+      letter-spacing: -0.02em;
+      text-transform: none;
+    }
+
+    .country {
+      color: inherit;
+    }
+
+    figure {
+      width: 5.5rem;
+    }
+
+    /* El marco no se imprime: a 88 px las escuadras se tocarían entre sí, y es
+       tinta de acento en las cuatro esquinas de una foto que en el CV ya va
+       con su filete. Vuelve el borde de 1 px de siempre, y el tinte de espera
+       pasa a `background-color` ahora que no hay capas que respetar. */
+    figure {
+      background-color: var(--accent-soft);
+      background-image: none;
+      border: 1px solid var(--border);
+      box-shadow: none;
+    }
+
+    /* El retrato es de la identidad de la web, así que se imprime; lo que sale
+       es el tinte de acento del marco, no la sombra de pantalla. */
+    .print-contact {
+      font-size: 0.68rem;
+      margin-top: 0.1rem;
+    }
+
+    /* En papel un enlace subrayado en azul distrae; la dirección ya se lee. El
+       `href` sigue entero, que es lo que el PDF convierte en anotación. */
+    .print-contact a {
+      color: inherit;
+      text-decoration: none;
+    }
+  }
+</style>

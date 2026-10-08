@@ -1,0 +1,69 @@
+---
+/**
+ * La miniatura de una tarjeta de proyecto: la primera captura de su demo.
+ *
+ * Hasta el 06-10-2026 ninguna tarjeta llevaba imagen, ni en la portada ni en el
+ * índice: siete títulos con un párrafo, y las capturas sólo aparecían al abrir
+ * la ficha. Un proyecto se juzga primero por cómo se ve, así que la primera
+ * captura sube a la tarjeta.
+ *
+ * - **Perezosa siempre.** Las tarjetas caen lejos del primer pantallazo en la
+ *   portada, y el LCP es el retrato del hero (PERF-03): nada de aquí puede
+ *   competir con él.
+ * - **`alt=""`.** La tarjeta ya nombra el proyecto en su `h3` y en la etiqueta
+ *   de su disparador; describir la captura aquí sería repetirlo. La descripción
+ *   larga sigue en la ficha, junto a la captura a tamaño completo.
+ * - **Recortada desde arriba.** Hay capturas de navegador (16:10), de ventana
+ *   emergente y de teléfono (verticales). En una tira apaisada lo que identifica
+ *   cada una es su cabecera, que es lo que deja `object-position: top`.
+ * - **Dentro de una caja propia** y no la imagen suelta: el estilo con ámbito de
+ *   Astro llega a los elementos de esta plantilla, y el `<img>` lo pinta
+ *   `<Image>`. La caja lo alcanza con `:global(img)` sin depender de eso.
+ *
+ * Sin demo no hay miniatura, y la tarjeta queda como estaba.
+ */
+import { Image } from "astro:assets"
+import { PROJECT_DEMOS } from "@/data/projectDemos"
+
+interface Props {
+  projectId: string
+  /** El `sizes` depende de la rejilla en que va la tarjeta. */
+  sizes: string
+}
+
+const { projectId, sizes } = Astro.props
+const shot = PROJECT_DEMOS[projectId]?.shots[0]
+---
+
+{
+  shot && (
+    <div class="thumb no-print">
+      <Image
+        src={shot.src}
+        alt=""
+        widths={[320, 640]}
+        sizes={sizes}
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
+  )
+}
+
+<style>
+  .thumb {
+    aspect-ratio: 16 / 10;
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    border-radius: 0.6rem;
+    overflow: hidden;
+  }
+
+  .thumb :global(img) {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    width: 100%;
+  }
+</style>

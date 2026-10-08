@@ -1,0 +1,662 @@
+---
+/**
+ * El formulario de contacto, compartido por la portada y la landing de
+ * servicios.
+ *
+ * Nació dentro de `Contact.astro` y salió aquí cuando servicios dejó de mandar
+ * a la gente fuera del sitio: son el mismo formulario —el mismo endpoint, la
+ * misma validación, el mismo `mountContactForm`— y dos copias habrían empezado
+ * a separarse en el primer retoque.
+ *
+ * El guion vive en `src/lib/contactForm.ts` y busca `[data-contact]`, así que
+ * este componente **no puede aparecer dos veces en la misma página**. Hoy no
+ * pasa: la portada lo pone en su cierre y servicios en su bloque de reserva.
+ *
+ * El `no-print` se decide fuera, en la sección que lo envuelve: en la portada
+ * el contacto ya está en la cabecera del CV y un formulario impreso son tres
+ * cajas vacías.
+ */
+import type { Locale } from "@/cv"
+import { t } from "@/lib/i18n"
+import { CONTACT_LIMITS } from "@/lib/contact"
+import { whatsappUrl } from "@/lib/contactLinks"
+import { PRIVACY_NOTICE } from "@/data/privacy"
+import { localized } from "@/lib/i18n"
+import { publicPagePath } from "@/lib/publicPages"
+
+interface Props {
+  locale: Locale
+  email: string
+  /* `| undefined` explícito y no sólo `?`: con `exactOptionalPropertyTypes` no
+     es lo mismo omitir la prop que pasarla valiendo `undefined`, y `phone` sale
+     así del esquema del CV. */
+  phone?: string | undefined
+  /** Renglón sobre el formulario. Cada página trae el suyo. */
+  intro: string
+  /** Asunto prerrellenado, editable. Servicios llega con el suyo puesto. */
+  subject?: string
+  /**
+   * La trama de puntos del cierre de la portada. Es de esa pantalla y no del
+   * formulario: en servicios este bloque no cierra nada.
+   */
+  texture?: boolean
+}
+
+const {
+  locale,
+  email,
+  phone,
+  intro,
+  subject = "",
+  texture = false,
+} = Astro.props
+---
+
+<div
+  class:list={["contact", { "contact--texture": texture }]}
+  data-contact
+  data-contact-url="/api/contact"
+  data-email={email}
+  data-sending={t(locale, "contactSending")}
+  data-send={t(locale, "contactSend")}
+  data-sent={t(locale, "mailSent")}
+  data-failed={t(locale, "mailFailed")}
+  data-rate-limited={t(locale, "mailRateLimited")}
+  data-fallback={t(locale, "mailFallback")}
+  data-bad-email={t(locale, "mailBadEmail")}
+  data-email-suggestion={t(locale, "mailEmailSuggestion")}
+  data-bad-subject={t(locale, "mailBadSubject")}
+  data-bad-message={t(locale, "mailBadMessage")}
+>
+  <p class="contact-intro">{intro}</p>
+
+  {
+    /**
+     * `novalidate` y sin `action`/`method`: la CSP del sitio declara
+     * `form-action 'none'`, así que un envío nativo lo bloquearía el
+     * navegador antes de salir. El envío va por `fetch()`, que sí entra en
+     * `connect-src 'self'`.
+     *
+     * Sin JS el formulario no envía —no puede—, y por eso el `mailto:` de
+     * abajo no es un adorno: es el camino real cuando no hay guion, cuando
+     * el endpoint no está configurado (responde 503) o cuando falla la red.
+     */
+  }
+  <form class="contact-form" data-contact-form novalidate>
+    {
+      /**
+       * El mensaje va **primero y solo**.
+       *
+       * Tres campos y un botón a la vez piden rellenar una ficha antes de
+       * decir nada; empezando por el mensaje, lo primero que se ve es el
+       * único sitio donde hay algo que contar. El correo y el asunto sólo
+       * hacen falta para enviar, así que aparecen al escribir.
+       *
+       * El `placeholder` es un espacio a propósito: no se ve, pero hace que
+       * `:placeholder-shown` distinga «vacío» de «escrito», que es lo que
+       * dispara el revelado sin una línea de JS.
+       */
+    }
+    <div class="field">
+      <label class="label-mono" for="contact-message">
+        {t(locale, "contactLabelMessage")}
+      </label>
+      <textarea
+        id="contact-message"
+        name="message"
+        rows="4"
+        placeholder=" "
+        maxlength={CONTACT_LIMITS.message}
+        required></textarea>
+    </div>
+
+    <div class="field field--secondary">
+      <label class="label-mono" for="contact-email">
+        {t(locale, "mailAskEmail")}
+      </label>
+      <input
+        id="contact-email"
+        name="email"
+        type="email"
+        autocomplete="email"
+        maxlength={CONTACT_LIMITS.email}
+        required
+      />
+    </div>
+
+    <div class="field field--secondary">
+      <label class="label-mono" for="contact-subject">
+        {t(locale, "mailAskSubject")}
+      </label>
+      <input
+        id="contact-subject"
+        name="subject"
+        type="text"
+        maxlength={CONTACT_LIMITS.subject}
+        value={subject}
+        required
+      />
+    </div>
+
+    {
+      /* La misma trampa antispam que la consola: invisible para una persona,
+           fuera del orden de tabulación y del árbol de accesibilidad, y sólo la
+           rellena un bot que complete el formulario a ciegas. */
+    }
+    <input
+      class="contact-trap"
+      data-contact-trap
+      type="text"
+      name="company"
+      tabindex="-1"
+      autocomplete="off"
+    />
+
+    <p class="contact-privacy label-mono">
+      {localized(PRIVACY_NOTICE.short, locale)}
+      <a href={publicPagePath("privacy", locale)}>
+        {localized(PRIVACY_NOTICE.link, locale)}
+      </a>
+    </p>
+
+    <div class="contact-actions">
+      <button class="contact-send" type="submit" data-contact-send>
+        {t(locale, "contactSend")}
+      </button>
+      {
+        /* `aria-live` en el sitio donde se anuncia el resultado, y presente
+             desde el primer pintado: una región viva que se crea junto con su
+             mensaje no la lee nadie. */
+      }
+      <p
+        class="contact-status"
+        data-contact-status
+        data-tag-sent={t(locale, "statusTagSent")}
+        data-tag-error={t(locale, "statusTagError")}
+        data-tag-sending={t(locale, "statusTagSending")}
+        role="status"
+        aria-live="polite"
+      >
+      </p>
+    </div>
+  </form>
+
+  {
+    /* Las vías que no dependen de que el endpoint esté en pie. El `mailto:`
+         además es el camino real sin JS: la CSP declara `form-action 'none'`,
+         así que sin guion el formulario no puede enviar. */
+  }
+  <p class="contact-alt label-mono">
+    <a class="contact-mailto" href={`mailto:${email}`}>{email}</a>
+    {
+      phone && (
+        <a
+          class="contact-whatsapp"
+          href={whatsappUrl(phone, t(locale, "whatsappText"))}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {t(locale, "whatsapp")}
+        </a>
+      )
+    }
+  </p>
+</div>
+
+<style>
+  .contact {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    position: relative;
+  }
+
+  /**
+   * La trama de puntos del cierre.
+   *
+   * Estrena `--dot-grid`, que estaba declarado en `Layout.astro` y no lo usaba
+   * nadie: los dos efectos de matriz del sitio se escribían su propio
+   * `radial-gradient`. Aquí el motivo se gana el sitio porque es la última
+   * pantalla y la única que pide algo; el degradado la apaga hacia abajo para
+   * que no compita con los campos.
+   *
+   * Va en un `::before` y no en el fondo del bloque para poder enmascararla sin
+   * tocar el `background` de nadie, y en `print` no existe: `@media print` ya
+   * anula `mask-image` en todo el documento, y sin máscara esto serían puntos
+   * sólidos sobre el papel.
+   */
+  .contact--texture::before {
+    background-image: var(--dot-grid);
+    background-size: var(--dot-grid-size);
+    content: "";
+    inset: -1.5rem -1.5rem auto;
+    block-size: 9rem;
+    mask-image: linear-gradient(to bottom, #000, transparent);
+    opacity: 0.5;
+    pointer-events: none;
+    position: absolute;
+    z-index: -1;
+  }
+
+  .contact-intro {
+    color: var(--text-subtle);
+    max-width: 52ch;
+  }
+
+  /**
+   * Una columna. Antes eran dos para los datos cortos y una para el mensaje, y
+   * la rejilla dejaba de tener sentido en cuanto el mensaje pasó a ir primero y
+   * los otros dos a salir juntos y después: una fila de dos que aparece de
+   * golpe se lee como que algo se ha movido, no como que algo se ha abierto.
+   */
+  .contact-form {
+    display: grid;
+    gap: 0.9rem;
+    max-width: 34rem;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  /**
+   * Correo y asunto: sólo cuando hay mensaje.
+   *
+   * Todo en CSS a propósito. Con `:has()` el formulario se abre solo en cuanto
+   * el `<textarea>` deja de estar vacío, sin escuchar teclas y sin depender de
+   * que el guion haya cargado; el atributo `data-expanded` es la otra puerta,
+   * la que abre `contactForm.ts` cuando la validación falla en uno de estos dos
+   * campos —no se puede enfocar lo que está en `display: none`—.
+   *
+   * `display: none` y no `visibility` u `opacity`: un campo que está ahí pero
+   * no se ve sigue siendo tabulable y sigue anunciándose, y eso es peor que no
+   * estar.
+   */
+  .field--secondary {
+    display: none;
+  }
+
+  .contact-form:has(#contact-message:not(:placeholder-shown)) .field--secondary,
+  .contact-form[data-expanded] .field--secondary {
+    display: flex;
+  }
+
+  /**
+   * Caja entera, no filete inferior.
+   *
+   * La subraya suelta tenía dos problemas que se ven en cuanto hay tres campos
+   * seguidos: la línea flotaba sin nada encima —el campo no empezaba en ningún
+   * sitio, sólo terminaba— y, al aparecer correo y asunto debajo del mensaje,
+   * tres rayas paralelas se leían como separadores de lista y no como sitios
+   * donde escribir. Una caja dice dónde se escribe sin que haya que deducirlo.
+   *
+   * El relleno es `--surface`, el mismo de las tarjetas: el campo se levanta un
+   * escalón sobre `--bg` en vez de pintarse encima del fondo de la página.
+   *
+   * Lo que **no** cambia es el token. `--border-control` y no `--border` no es
+   * una decisión de estilo: un campo de formulario es un control, y la WCAG 2.2
+   * pide 3:1 para el contorno de un control (1.4.11, contraste de lo que no es
+   * texto). Medido en oscuro, `--border` sobre el fondo de la página da
+   * **1,49:1**, así que el campo no se veía: había que adivinar dónde se
+   * escribe. Una subraya al mismo token sigue cumpliendo —el criterio pide que
+   * el control se distinga, no que esté rodeado—; bajarla a `--border` no.
+   *
+   * Las tarjetas de proyecto o las filas de idiomas sí pueden quedarse con el
+   * filete suave: no son controles y ese criterio no les aplica.
+   *
+   * Ni axe ni Lighthouse lo detectan —comprueban contraste de texto, no de
+   * contornos—, así que aquí no hay red: si alguien lo baja, la puntuación
+   * seguirá en 100.
+   *
+   * ## El radio es el de `.contact-send`
+   *
+   * 6 px, el del botón de enviar, para que el formulario entero responda con
+   * una sola forma. Y el `outline` de `:focus-visible` —uno solo para todo el
+   * sitio, en `Layout.astro`, con `outline-offset: 3px`— sigue el
+   * `border-radius` del elemento, así que el anillo sale con la misma curva que
+   * la caja. No devolverlo a `0`.
+   */
+  .contact input,
+  .contact textarea {
+    background: var(--surface);
+    border: 1px solid var(--border-control);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.95rem;
+    min-height: 44px;
+    padding: 0.7rem 0.85rem;
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease;
+    width: 100%;
+  }
+
+  .contact textarea {
+    line-height: 1.6;
+    /* Sólo a lo alto: a lo ancho rompería la rejilla. */
+    resize: vertical;
+  }
+
+  @media (hover: hover) {
+    /* El contorno no se toca al pasar por encima: cumple 3:1 y cualquier otro
+       token lo bajaría. Lo que responde es el relleno, como en las tarjetas. */
+    .contact input:hover,
+    .contact textarea:hover {
+      background: var(--surface-hover);
+    }
+  }
+
+  /**
+   * El foco **no** repinta el contorno del campo.
+   *
+   * Un campo de texto enfocado siempre casa con `:focus-visible`, también al
+   * llegar con el ratón, así que el anillo global de `Layout.astro` ya está
+   * ahí: teñir además el borde de acento dejaba dos marcos verdes concéntricos
+   * separados por los 3 px de `outline-offset`. Un anillo, no dos.
+   */
+  .contact input:focus-visible,
+  .contact textarea:focus-visible {
+    background: var(--surface);
+  }
+
+  .contact-trap {
+    display: none;
+  }
+
+  .contact-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+  }
+
+  /**
+   * La primera capa, en la voz de las etiquetas del sitio.
+   *
+   * Era un párrafo de 0,78 rem en caja alta y baja, o sea con el mismo aspecto
+   * que el texto que sí hay que leer, y por eso pesaba: delante de un campo de
+   * escritura competía con el campo. Ahora es `label-mono` —lo mismo que
+   * «CONTACTO Y REDES» o «[ES]»—, que es lo que es: un rótulo de estado.
+   *
+   * El tamaño y el color los pone la clase global; aquí sólo el interlineado,
+   * que `label-mono` deja en 1,2 para rótulos de una línea y esto puede partir
+   * en dos, y el ancho máximo.
+   */
+  /**
+   * El hueco entre la finalidad y el enlace lo pone el contenedor.
+   *
+   * Aquí hubo un `::before` con un punto medio, y salía «responderte·⎵Más
+   * información». Dos causas, ninguna de ellas el pseudo-elemento, que llegaba
+   * al build intacto:
+   *
+   * 1. **Astro se come el espacio del marcado.** Entre la expresión y el `<a>`
+   *    había un salto de línea, y el compilador descarta ese hueco igual que
+   *    JSX. En el HTML servido se leía `…responderte<a href=…`, pegado.
+   * 2. **El punto medio sólo tenía margen a la derecha**, así que aunque
+   *    hubiera espacio se habría soldado a la última letra. Y vivía **dentro**
+   *    del enlace: salía subrayado y dentro del área de clic.
+   *
+   * Con `flex` el nodo de texto suelto se convierte en elemento flexible
+   * anónimo y el `gap` lo separa del enlace sin pseudo-elementos y sin depender
+   * de un espacio que el compilador puede tragarse. `wrap` hace lo que antes no
+   * pasaba: en estrecho el enlace baja a su propia línea en vez de partirse.
+   */
+  .contact-privacy {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem 0.6rem;
+    line-height: 1.5;
+    max-width: 68ch;
+  }
+
+  .contact-privacy a {
+    color: var(--accent-strong);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  /**
+   * El único botón de la página que grita, con el mismo par de tokens que el
+   * CTA de contratación: relleno sólido en claro, acento en oscuro.
+   *
+   * Rectángulo técnico —6 px— y etiqueta mono en versalitas: entre una píldora
+   * y un botón de instrumento, el resto del sitio ya eligió instrumento.
+   */
+  .contact-send {
+    background: var(--hire-fill);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    /**
+     * Una sombra transparente en reposo, y no `none`.
+     *
+     * Viene de un síntoma reportado: al pasar el puntero **el texto parecía
+     * ponerse en negrita**. Lo que sí está comprobado es que no lo hace por
+     * CSS —no hay ni una regla de `:hover` en todo el repo que toque
+     * `font-weight`, `font-family`, `letter-spacing` ni el relleno de este
+     * botón— y que la caja no se mueve: medido en Chromium, reposo y hover dan
+     * el mismo ancho (146,73 px) y el mismo peso.
+     *
+     * La hipótesis es un artefacto de rasterizado: al pasar de `box-shadow:
+     * none` a una sombra, el navegador puede promocionar el elemento a una capa
+     * compuesta y el texto deja el suavizado subpíxel por el de escala de
+     * grises, con lo que los trazos engordan. Declarar la propiedad desde el
+     * principio —radio cero y transparente, que no pinta nada— evita ese
+     * cambio de naturaleza.
+     *
+     * **No se ha podido reproducir**, y conviene decirlo: comparando los
+     * píxeles del interior del botón entre reposo y hover salen **cero**
+     * diferencias, con esta línea y sin ella. Chromium sin cabeza no usa
+     * suavizado subpíxel, así que el entorno de pruebas no puede ver este
+     * efecto. La línea se queda porque no cuesta nada, porque es la mitigación
+     * estándar de ese artefacto y porque además deja la transición de 220 ms
+     * partiendo de un valor interpolable en vez de `none` — pero si el síntoma
+     * persiste en un navegador real, el problema es otro y hay que volver aquí.
+     */
+    box-shadow: 0 0 0 0 transparent;
+    color: var(--hire-text);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--label-size);
+    font-weight: 700;
+    letter-spacing: var(--label-tracking);
+    min-height: 44px;
+    padding: 0.7rem 1.25rem;
+    text-transform: uppercase;
+    transition:
+      box-shadow 220ms ease,
+      opacity 180ms ease,
+      scale var(--tick);
+  }
+
+  /* El mismo chasquido que los controles de la barra. */
+  .contact-send:active:not(:disabled) {
+    scale: 0.97;
+  }
+
+  .contact-send[disabled] {
+    cursor: progress;
+    opacity: 0.65;
+  }
+
+  @media (hover: hover) {
+    .contact-send:hover:not([disabled]) {
+      box-shadow: var(--glow-hover);
+    }
+  }
+
+  .contact-status {
+    font-size: 0.875rem;
+    margin: 0;
+    /* Vacía no debe reservar hueco ni desplazar el botón al aparecer. */
+    min-width: 0;
+  }
+
+  .contact-status[data-state="error"] {
+    color: var(--warning);
+  }
+
+  .contact-status[data-state="sent"] {
+    color: var(--accent-strong);
+  }
+
+  /**
+   * El distintivo entre corchetes, delante del mensaje.
+   *
+   * Es el estado como lo escribiría un panel: `[ENVIADO] Te responderá a esa
+   * dirección`. La frase se queda —`[ERROR]` a secas no dice qué ha pasado ni
+   * a dónde escribir—; el corchete sólo le pone el rótulo delante y hace que se
+   * distinga de un renglón de ayuda cualquiera sin depender del color.
+   *
+   * Va en CSS y con `attr()` porque `contactForm.ts` ya escribe `data-state`:
+   * el guion no tiene que aprender nada nuevo, y el texto traducido entra por
+   * el marcado, que es donde vive el resto de la traducción.
+   *
+   * Son tres y no dos. El envío en curso llevaba el mensaje sin rótulo, que es
+   * el único de los tres momentos en el que la fila cambiaba de forma; con
+   * `[ENVIANDO…]` delante el panel dice lo mismo en los tres, y en un tono más
+   * apagado porque todavía no ha pasado nada.
+   */
+  .contact-status[data-state="sending"] {
+    color: var(--text-muted);
+  }
+
+  .contact-status[data-state="sending"]::before {
+    content: "[" attr(data-tag-sending) "] ";
+  }
+
+  .contact-status[data-state="sent"]::before {
+    content: "[" attr(data-tag-sent) "] ";
+  }
+
+  .contact-status[data-state="error"]::before {
+    content: "[" attr(data-tag-error) "] ";
+  }
+
+  .contact-status[data-state]::before {
+    font-family: var(--font-mono);
+    font-size: var(--label-size);
+    letter-spacing: var(--label-tracking);
+    text-transform: uppercase;
+  }
+
+  /**
+   * Los respaldos viven siempre a la vista, no sólo cuando algo falla: son las
+   * vías de verdad, y hay quien prefiere escribir desde su programa de correo o
+   * seguir la conversación en el móvil.
+   *
+   * Toma de `.label-mono` la tipografía y el tamaño, pero **no** las
+   * versalitas: una dirección de correo es un dato literal, y en mayúsculas
+   * deja de leerse como la dirección que es. El tracking también vuelve a cero,
+   * que es el de un valor y no el de una etiqueta.
+   */
+  .contact-alt {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    letter-spacing: 0;
+    margin: 0;
+    text-transform: none;
+  }
+
+  .contact-alt a {
+    color: var(--text-muted);
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+  }
+
+  /**
+   * El mismo criterio que los chips del hero: en reposo, texto; al responder,
+   * el color de la aplicación. `.contact-mailto` y `.contact-whatsapp` llevaban
+   * clase desde el principio y ningún estilo.
+   *
+   * Aquí el color **sí** toca texto, así que de cada marca se toma el tono que
+   * aguanta como enlace subrayado sobre `--bg`: en WhatsApp son sus dos verdes
+   * oficiales —el teal en claro, el primario en oscuro—, y en el correo la
+   * variante fuerte del rojo. En oscuro suben a la versión clara por el mismo
+   * motivo por el que suben allí.
+   */
+  /**
+   * El respaldo va en el contenedor y no en el enlace, y eso importa.
+   *
+   * En `.contact-alt a` ganaba siempre: una clase más un tipo pesa más que la
+   * clase suelta de `.contact-mailto` o `.contact-whatsapp`, así que los dos
+   * colores de marca de aquí abajo eran letra muerta —el enlace se ponía del
+   * acento al pasar por encima, no del color de su aplicación—. Puesto en el
+   * padre llega por herencia, y cualquier declaración directa en el enlace le
+   * gana sin depender de contar selectores.
+   */
+  .contact-alt {
+    --brand: var(--accent-strong);
+  }
+
+  .contact-mailto {
+    --brand: light-dark(#a01b19, #f08a80);
+  }
+
+  /* Los dos verdes son de la marca: #25d366 es el primario de la aplicación y
+     #128c7e su teal, y ése es el que aguanta como enlace subrayado sobre fondo
+     claro —el primario sobre blanco se queda en 1,9:1, que no es un enlace, es
+     una mancha—. */
+  .contact-whatsapp {
+    --brand: light-dark(#128c7e, #25d366);
+  }
+
+  .contact-alt a:focus-visible {
+    color: var(--brand);
+  }
+
+  @media (hover: hover) {
+    .contact-alt a:hover {
+      color: var(--brand);
+    }
+  }
+
+  /* Un solo color donde se pide contraste, igual que en el hero. */
+  @media (prefers-contrast: more) {
+    .contact-alt a,
+    .contact-mailto,
+    .contact-whatsapp {
+      --brand: var(--accent-strong);
+    }
+
+    /**
+     * El botón de enviar se quedaba **sin ninguna respuesta al puntero**.
+     *
+     * Con más contraste pedido, `Layout.astro` apaga `--glow-hover`, y el halo
+     * era la única reacción de hover que tenía este botón: quien pide contraste
+     * alto —a menudo por baja visión— era justo quien se quedaba sin saber si
+     * el puntero estaba encima del botón que envía el formulario.
+     *
+     * Un borde visible en vez del halo. `border-color` y no `border-width`, que
+     * movería el texto un píxel.
+     */
+    .contact-send:hover:not([disabled]),
+    .contact-send:focus-visible {
+      border-color: var(--text);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .contact input,
+    .contact textarea,
+    .contact-send {
+      transition: none;
+    }
+
+    .contact-send:active:not(:disabled) {
+      scale: 1;
+    }
+  }
+
+  /* Sin máscara la trama sería una alfombra de puntos sólidos: en más contraste
+     el fondo tiene que estar quieto y limpio. */
+  @media (prefers-contrast: more) {
+    .contact--texture::before {
+      display: none;
+    }
+  }
+</style>

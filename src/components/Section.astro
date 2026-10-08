@@ -1,0 +1,385 @@
+---
+import { sectionOrdinal } from "@/lib/sections"
+
+interface Props {
+  id: string
+  title?: string
+  /**
+   * Peso visual del bloque, no su contenido.
+   *
+   * `default` es lo que se lee de arriba abajo —experiencia, proyectos—.
+   * `compact` es una banda de datos: educación e idiomas son una entrada y
+   * cinco filas, y con el ritmo grande pesaban en la página lo mismo que las
+   * dos secciones que sí venden. Al entornar los ojos tienen que distinguirse.
+   */
+  density?: "default" | "compact"
+  /**
+   * El nombre del bloque en papel, cuando no es el mismo que en pantalla.
+   *
+   * La web puede llamar «Sobre mí» a lo que un currículum llama «Perfil
+   * profesional», y el PDF lo lee un ATS: los extractores buscan rótulos
+   * estándar para trocear el documento, y un título de portada no lo es.
+   *
+   * Un solo `h2` con los dos textos y no dos `h2`: el `aria-labelledby` de la
+   * sección apunta a ese `id`, y duplicarlo daría dos elementos con el mismo.
+   * El que sobra va con `display: none`, que es lo que lo saca del cálculo del
+   * nombre accesible.
+   */
+  printTitle?: string
+  /** Clases globales del sitio —`no-print`— para la caja de la sección. */
+  class?: string
+}
+
+const {
+  title,
+  id,
+  density = "default",
+  printTitle,
+  class: className,
+} = Astro.props
+const headingId = title ? `section-${id}` : undefined
+const ordinal = sectionOrdinal(id)
+---
+
+<section
+  id={id}
+  class={className}
+  aria-labelledby={headingId}
+  data-density={density}
+>
+  {
+    title && (
+      <div class="section-heading">
+        <span class="section-rule" aria-hidden="true" />
+        {/* Los corchetes van en nodos propios y no como `::before`/`::after`
+            del título: el `aria-labelledby` de la sección toma su nombre de ese
+            `h2`, y el contenido de un pseudoelemento entra en el cálculo del
+            nombre accesible en Chromium y en WebKit. Nadie debería oír
+            «corchete Proyectos corchete» antes de cada bloque.
+
+            Y van vacíos: los dibuja el CSS con dos bordes, no un glifo. Ver la
+            nota de `.bracket`. */}
+        <span class="bracket bracket--open" aria-hidden="true" />
+        <h2 id={headingId}>
+          {printTitle ? (
+            <>
+              <span class="no-print">{title}</span>
+              <span class="print">{printTitle}</span>
+            </>
+          ) : (
+            title
+          )}
+        </h2>
+        <span class="bracket bracket--close" aria-hidden="true" />
+        {/* `aria-hidden`: el número ordena la vista, no el documento. Quien
+            escucha la página ya recibe el orden por el propio recorrido, y
+            leerle «cero dos» antes de cada título es ruido. */}
+        {ordinal && (
+          <span class="section-ordinal label-mono" aria-hidden="true">
+            {ordinal}
+          </span>
+        )}
+      </div>
+    )
+  }
+  <slot />
+</section>
+
+<style>
+  section {
+    /* El cuerpo del título lo llevan dos elementos —el `h2` y los corchetes que
+       lo enmarcan— y cambia con la densidad y con el papel. Con un token no hay
+       que acordarse de mover los dos ni de mantenerlos sincronizados. */
+    --heading-size: clamp(1.35rem, 2.5vw, 1.65rem);
+    width: min(100%, 920px);
+    margin: 0 auto clamp(3.75rem, 7vw, 5.5rem);
+    /* Un dedo de aire al saltar desde el índice lateral. Eran 5 rem, el alto de
+       la barra pegajosa; la barra ya no persigue a nadie. */
+    scroll-margin-top: 1rem;
+  }
+
+  /* El hueco de la fila baja a los 0,3 rem que separan cada corchete de la
+     palabra, y el marcador recupera con margen propio los 0,75 rem que tenía
+     antes del título. Es tres nodos menos por sección —nueve en la página— que
+     envolver el título y sus corchetes en un grupo sólo para darle otro `gap`,
+     y esta plantilla se paga en las tres portadas. */
+  /**
+   * `stretch` y no `center`: los corchetes tienen que medir lo que mida el
+   * título.
+   *
+   * Con el título centrado, un `h2` de dos líneas —«Algunas cosas que podemos
+   * mejorar» a 390 px— dejaba dos corchetes de una línea flotando a media
+   * altura a los lados, que es justo lo que un corchete no puede hacer: enmarca
+   * o no es un corchete. Estirados, el marco crece con el texto y el salto de
+   * línea deja de ser un problema.
+   *
+   * El marcador de puntos y el ordinal vuelven a centrarse uno a uno: el
+   * primero mide 3 px de alto y estirado se convertiría en una columna.
+   */
+  .section-heading {
+    align-items: stretch;
+    display: flex;
+    gap: 0.3rem;
+    margin-bottom: 1.5rem;
+  }
+
+  /**
+   * Matriz de puntos y no tres barras: el mismo motivo que el nombre del hero,
+   * la trama del retrato y el medidor de idiomas, aplicado al marcador que
+   * abre cada sección.
+   *
+   * Antes eran tres segmentos rectos de 6 px. La rejilla dice lo mismo —un
+   * marcador corto de acento antes del título— con el vocabulario que el resto
+   * del sitio ya habla, y sigue sin costar DOM: es un gradiente, no seis nodos.
+   *
+   * Dos filas de 4 px de paso sobre 26×3 px no caben; con `background-size` de
+   * 4×4 y 3 px de alto se pinta una sola fila de seis puntos, que es
+   * exactamente el peso que tenía el marcador anterior.
+   *
+   * Selector de clase y no `.section-heading > span`: desde que el número
+   * ordinal vive en la misma fila, el descendiente directo casaba con los dos y
+   * al índice le caía encima el gradiente de acento.
+   */
+  /**
+   * OJO CON `--dot-ink`: no funciona, y no es cosa de este archivo.
+   *
+   * `--dot-fine` se declara en `:root` como `radial-gradient(circle,
+   * var(--dot-ink, currentColor) …)`, y el `var()` de dentro de una propiedad
+   * personalizada se sustituye **donde se declara**, no donde se usa. Es decir,
+   * en `:root`, donde `--dot-ink` no existe: el token llega a todo el sitio ya
+   * cocido con el respaldo `currentColor`, y declarar `--dot-ink` en el
+   * elemento que lo usa no cambia nada. Medido en el navegador: el valor
+   * calculado de `--dot-fine` en `:root` es literalmente
+   * `radial-gradient(circle, currentColor 1.1px, transparent 1.2px)`.
+   *
+   * Le pasa a los ocho consumidores del motivo, no sólo a éste —de ahí que el
+   * marcador llevara hasta ahora el color del texto y no el del acento, que es
+   * el que su propio comentario dice—. Aquí se esquiva por la puerta que sí
+   * queda abierta: `currentColor`, o sea `color`. El carril y su capa encendida
+   * lo declaran cada uno, y el motivo por fin sale del color que le toca.
+   */
+  .section-rule {
+    align-self: center;
+    /* El carril apagado: aquí no hay texto, `color` es sólo la tinta de los
+       puntos. La capa encendida de abajo lo vuelve a declarar. */
+    color: var(--border-hover);
+    background-image: var(--dot-fine);
+    background-size: var(--dot-fine-size);
+    border-radius: 0;
+    flex: 0 0 26px;
+    height: 3px;
+    margin-inline-end: 0.45rem;
+    position: relative;
+  }
+
+  /**
+   * La capa encendida.
+   *
+   * Por defecto cubre el carril entero, o sea el marcador de siempre. Sólo
+   * cuando el navegador entiende las líneas de tiempo de scroll —y el sistema
+   * no pide menos movimiento— arranca en cero y se llena. Nunca al revés: un
+   * estado inicial vacío en el CSS dejaría el marcador apagado para siempre en
+   * los navegadores que no animan.
+   */
+  .section-rule::before {
+    color: var(--accent);
+    background-image: var(--dot-fine);
+    background-size: var(--dot-fine-size);
+    content: "";
+    inline-size: 26px;
+    inset: 0 auto 0 0;
+    position: absolute;
+  }
+
+  @keyframes section-rule-fill {
+    from {
+      inline-size: 0;
+    }
+
+    to {
+      inline-size: 26px;
+    }
+  }
+
+  @supports (animation-timeline: view()) {
+    @media screen and (prefers-reduced-motion: no-preference) {
+      /**
+       * Los seis puntos se encienden de uno en uno mientras la sección entra.
+       *
+       * `steps(6, jump-start)` y no una interpolación continua: los puntos son
+       * seis luces, no una barra, y verlos aparecer a medias contradice el
+       * motivo. Con `jump-start` el primer escalón salta al entrar, así que los
+       * anchos van 4,33 → 8,67 → 13 → 17,33 → 21,67 → 26 px y cada uno rebasa
+       * el centro del punto que le toca —2, 6, 10, 14, 18 y 22 px, el paso de
+       * 4 de `--dot-fine`—. Con `jump-end` el último no llegaría a encenderse
+       * hasta el final exacto del recorrido.
+       *
+       * La línea de tiempo es la de la sección (`--section-enter`, declarada en
+       * `Layout.astro`) y no un `view()` propio: la caja del marcador mide
+       * 26×3 px y entraría y saldría del borde en el mismo fotograma.
+       *
+       * El rango se adelanta un poco al de la sección —que va de `entry 8%` a
+       * `cover 22%`— para que el marcador termine de llenarse cuando el título
+       * ya está a plena opacidad, y no después.
+       *
+       * En propiedades separadas, como el revelado de la sección: al minificar,
+       * el atajo `animation` absorbe `animation-timeline` y produce una
+       * declaración inválida que el navegador descarta entera.
+       */
+      .section-rule::before {
+        animation-name: section-rule-fill;
+        animation-duration: auto;
+        animation-timing-function: steps(6, jump-start);
+        animation-fill-mode: both;
+        animation-timeline: --section-enter;
+        animation-range: entry 10% cover 20%;
+      }
+    }
+  }
+
+  /**
+   * El índice se ancla al borde opuesto, que es donde la capa terciaria estorba
+   * menos: el ojo entra por el título y encuentra el número al salir de la
+   * línea, no antes de leerla.
+   *
+   * `font-variant-numeric` en tabular: la mono ya lo es, pero el respaldo del
+   * sistema no siempre, y sin esto los números bailan de sección en sección
+   * cuando la fuente aún no ha cargado.
+   */
+  /* El indice en matriz de puntos: es una cifra de instrumento, que es
+     exactamente para lo que sirve Doto. Sube un punto de cuerpo porque los
+     puntos pesan menos que un trazo lleno y a 11 px se quedaba en nada.
+
+     Conserva `label-mono` en el marcado por el color, el tracking y las
+     versalitas; aqui solo se sustituye la familia. Y no necesita `@media print`
+     propio: el bloque de mas abajo ya lo esconde entero en papel. */
+  .section-ordinal {
+    align-self: center;
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    margin-left: auto;
+    padding-left: 1rem;
+  }
+
+  /**
+   * Notación de corchetes, el recurso de rótulo de los paneles Nothing.
+   *
+   * En el color del acento: es el único sitio del encabezado donde el acento
+   * aparece además del marcador de puntos, y con un trazo de 1,5 px frente al
+   * 700 del título queda claro cuál de los tres es el dato.
+   *
+   * **Dibujados y no escritos.** Eran dos `[` y `]` en mono al cuerpo del
+   * título, y un glifo mide lo que mide su línea: con un `h2` de dos líneas se
+   * quedaban a media altura. Tres bordes por lado —arriba, abajo y el de fuera—
+   * hacen la misma forma con la altura que le toque, que aquí es la del título
+   * entero porque la fila estira.
+   *
+   * El ancho va en `em` del propio corchete y no en `rem`: así encoge con
+   * `--heading-size` en las bandas compactas y en el papel sin una regla por
+   * cada caso.
+   */
+  .bracket {
+    align-self: stretch;
+    border-block: 1.5px solid var(--accent);
+    font-size: var(--heading-size);
+    inline-size: 0.3em;
+  }
+
+  .bracket--open {
+    border-inline-start: 1.5px solid var(--accent);
+  }
+
+  .bracket--close {
+    border-inline-end: 1.5px solid var(--accent);
+  }
+
+  h2 {
+    font-weight: 700;
+    line-height: 1.2;
+    font-size: var(--heading-size);
+    letter-spacing: -0.025em;
+    color: var(--text);
+  }
+
+  /* La banda de datos cede espacio y tamaño, no legibilidad: el título baja un
+     escalón y el aire de abajo se parte por la mitad, así que las secciones que
+     sí pesan quedan separadas de verdad de las que sólo informan. */
+  section[data-density="compact"] {
+    --heading-size: clamp(1.05rem, 1.8vw, 1.2rem);
+    /**
+     * El aire entre bandas, subido.
+     *
+     * Eran 2 a 2,75 rem, y con Educación y Certificaciones seguidas —dos listas
+     * de filas con filete, una detrás de otra— el ojo no encontraba dónde
+     * acababa una y empezaba la otra: la separación entre las dos secciones era
+     * casi la misma que entre dos filas de la misma lista. Sigue por debajo del
+     * ritmo de las secciones que sí venden, que es de lo que va la densidad
+     * compacta.
+     */
+    margin-bottom: clamp(3.25rem, 6vw, 4.25rem);
+  }
+
+  section[data-density="compact"] .section-heading {
+    margin-bottom: 1.1rem;
+  }
+
+  @media (width <= 700px) {
+    section {
+      margin-bottom: 3.5rem;
+    }
+
+    .section-heading {
+      margin-bottom: 1.25rem;
+    }
+
+    section[data-density="compact"] {
+      margin-bottom: 3rem;
+    }
+
+    section[data-density="compact"] .section-heading {
+      margin-bottom: 0.9rem;
+    }
+  }
+
+  @media print {
+    /**
+     * El atributo va en el selector a propósito.
+     *
+     * `section[data-density="compact"]` es más específico que `section`, y una
+     * media query no añade especificidad: sin el atributo aquí, las bandas
+     * compactas se llevaban al papel sus 2 rem de pantalla en vez de estos
+     * 0,9 y el CV dejaba de entrar en una hoja. En papel todas las secciones
+     * comparten ritmo: la jerarquía de la web la da el aire, y en A4 no sobra.
+     */
+    section,
+    section[data-density] {
+      --heading-size: 1.1rem;
+      max-width: none;
+      margin-bottom: 0.7rem;
+    }
+
+    .section-heading,
+    section[data-density] .section-heading {
+      margin-bottom: 0.35rem;
+    }
+
+    /* Los corchetes son rótulo de panel, no de currículum: en A4 el bloque se
+       llama «Experiencia laboral», no «[ Experiencia laboral ]». Y un ATS lee
+       este HTML tal cual. */
+    .bracket {
+      display: none;
+    }
+
+    /* No se encoge: con 16 px la rejilla corta el último punto por la mitad. */
+    .section-rule {
+      flex-basis: 26px;
+    }
+
+    /* El número es de pantalla: ordena un recorrido con scroll. En una hoja
+       las secciones ya se ven todas a la vez y sólo gastaría tinta. */
+    .section-ordinal {
+      display: none;
+    }
+  }
+</style>

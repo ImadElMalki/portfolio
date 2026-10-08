@@ -1,0 +1,44 @@
+---
+/**
+ * Cierre de la portada: el formulario de contacto.
+ *
+ * Es la única pieza de la web que habla con un servidor. El endpoint
+ * —`functions/api/contact.ts`— ya existía y sólo lo usaba la vista consola;
+ * aquí gana la puerta que ve todo el mundo.
+ *
+ * El formulario en sí vive en `ContactForm.astro`, compartido con la landing de
+ * servicios. Aquí queda lo que es del cierre: la sección, su renglón de entrada
+ * y la trama de puntos.
+ *
+ * Va con `no-print`: en papel el contacto ya está en la cabecera del CV, con
+ * el correo y los perfiles como enlaces pulsables, y un formulario impreso no
+ * es más que tres cajas vacías.
+ */
+import ContactForm from "@/components/ContactForm.astro"
+import Section from "@/components/Section.astro"
+import type { CvData, Locale } from "@/cv"
+import { t } from "@/lib/i18n"
+import { CLOSING_SECTION_ID } from "@/lib/sections"
+
+interface Props {
+  locale: Locale
+  cv: Readonly<CvData>
+}
+
+const { locale, cv } = Astro.props
+const { email, phone } = cv.basics
+---
+
+<Section
+  id={CLOSING_SECTION_ID}
+  title={t(locale, "contactHeading")}
+  class="no-print"
+>
+  <ContactForm
+    locale={locale}
+    email={email}
+    phone={phone}
+    intro={t(locale, "contactIntro")}
+    texture
+  />
+</Section>

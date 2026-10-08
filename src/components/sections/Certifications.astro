@@ -1,0 +1,352 @@
+---
+import Section from "@/components/Section.astro"
+import type { CvData, Locale } from "@/cv"
+import { localized, t } from "@/lib/i18n"
+import { sectionId, sectionTitle } from "@/lib/sections"
+
+interface Props {
+  locale: Locale
+  cv: Readonly<CvData>
+}
+
+const { locale, cv } = Astro.props
+const { certificates } = cv
+
+/**
+ * `Viewnext · 12 h · 2025`.
+ *
+ * Sólo el año, y no la fecha completa: el día en que se aprobó un curso de ocho
+ * horas no le dice nada a quien lee, y `formatDateRange` está para rangos —esto
+ * es una fecha suelta—. Las horas se caen del renglón cuando no constan, que es
+ * el caso del test de nivel de idioma.
+ */
+function credentialMeta(
+  issuer: string,
+  date: string,
+  hours: number | undefined,
+): string {
+  return [issuer, hours ? `${hours} h` : "", date.slice(0, 4)]
+    .filter(Boolean)
+    .join(" · ")
+}
+
+/**
+ * Cuatro a la vista y el resto plegadas.
+ *
+ * Diecisiete filas seguidas convertían una banda de datos en el bloque más
+ * largo de la página: pesaba más que Experiencia, que es la sección que sí
+ * vende. Las cuatro que quedan fuera del pliegue son las que dicen algo
+ * distinto entre sí —los dos cursos largos de frontend, ciberseguridad e
+ * inglés—, no las cuatro primeras de una tanda de nueve que comparten emisor y
+ * día.
+ *
+ * La elección va marcada en `cv.json` y no calculada aquí: nueve de los
+ * diecisiete certificados llevan la misma fecha, así que ningún criterio
+ * automático —ni fecha, ni horas— las distingue. Si nadie lleva la marca, el
+ * respaldo son las cuatro primeras del array, que es el orden ya curado del
+ * archivo.
+ */
+const marked = certificates.filter(({ featured }) => featured)
+const visible = marked.length > 0 ? marked : certificates.slice(0, 4)
+const folded = certificates.filter(
+  (certificate) => !visible.includes(certificate),
+)
+
+/**
+ * La escala de un vistazo, calculada y no escrita.
+ *
+ * Con cuatro filas visibles y trece plegadas, el tamaño real de la sección sólo
+ * se sabe abriendo el desplegable y contando. Esta línea lo dice antes.
+ *
+ * **Las horas suman sólo las declaradas.** Cuatro certificados no traen `hours`
+ * —los tres de midu.dev y el test de idioma—, así que el total es un mínimo
+ * comprobable, no la cuenta completa. Se prefiere quedarse corto a inventar una
+ * duración: quien sume a mano las filas visibles obtendrá menos, nunca más.
+ */
+const summary = t(locale, "certificatesSummary")
+  .replace("{n}", String(certificates.length))
+  .replace(
+    "{h}",
+    String(certificates.reduce((sum, c) => sum + (c.hours ?? 0), 0)),
+  )
+  .replace(
+    "{i}",
+    String(new Set(certificates.map(({ issuer }) => issuer)).size),
+  )
+---
+
+<Section
+  id={sectionId("certificates")}
+  title={sectionTitle("certificates", locale)}
+  density="compact"
+>
+  <p class="cert-summary label-mono">{summary}</p>
+
+  <ul class="certificate-list">
+    {
+      visible.map(({ name, issuer, date, hours, url }) => (
+        <li>
+          {/* El nombre enlaza a la ficha del curso cuando la hay, y es sólo
+              el nombre: un icono o un «ver curso» aparte sería una segunda cosa
+              que leer en una fila que ya tiene dos. Sin `url` se queda en
+              texto, que es el caso de los diez de formación interna. */}
+          {url ? (
+            <a
+              class="name"
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`${t(locale, "certificateCourse")} ${localized(name, locale)}`}
+            >
+              {localized(name, locale)}
+            </a>
+          ) : (
+            <span class="name">{localized(name, locale)}</span>
+          )}
+
+          <span class="meta label-mono">
+            {credentialMeta(issuer, date, hours)}
+          </span>
+        </li>
+      ))
+    }
+  </ul>
+
+  {
+    /**
+     * El renglón del perfil `focused`, donde la lista no se imprime.
+     *
+     * Antes ese perfil escondía la sección entera y el PDF salía sin un solo
+     * certificado: diecisiete títulos de curso que un filtro de empleo busca por
+     * nombre, fuera del documento. En una A4 no caben las diecisiete filas, pero
+     * un renglón de texto sí, y es texto de verdad —lo lee un extractor— en vez
+     * de un hueco. Misma receta que `.pdf-focused-skills` en `Skills.astro`.
+     */
+  }
+  <p class="pdf-focused-certs">
+    {
+      `${visible.map(({ name, issuer }) => `${localized(name, locale)} (${issuer})`).join(" · ")} · +${folded.length}`
+    }
+  </p>
+
+  {
+    /**
+     * El mismo desplegable que los puntos destacados de cada empleo, con su
+     * chevrón: `<details>` nativo, cero JS, y el teclado y el estado los pone
+     * el navegador.
+     *
+     * Conserva la clase `job-details` a propósito. `printableDetails.ts`
+     * consulta ese selector exacto para forzar la apertura al imprimir desde
+     * un navegador que no entienda `::details-content`, y con una clase propia
+     * este bloque se quedaría fuera de esa red.
+     *
+     * `--tail` es lo que manda el botón al final de la lista al abrirse, en vez
+     * de dejarlo a trece filas de lo que acaba de aparecer. Ver `Layout.astro`.
+     */
+    folded.length > 0 && (
+      <details class="job-details job-details--tail cert-details">
+        <summary>
+          <svg
+            class="chevron"
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            width="12"
+            height="12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+          <span data-fold-more>
+            {t(locale, "showMore").replace("{n}", String(folded.length))}
+          </span>
+          <span data-fold-less>{t(locale, "showLess")}</span>
+        </summary>
+
+        <ul class="certificate-list">
+          {folded.map(({ name, issuer, date, hours, url }) => (
+            <li>
+              {url ? (
+                <a
+                  class="name"
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`${t(locale, "certificateCourse")} ${localized(name, locale)}`}
+                >
+                  {localized(name, locale)}
+                </a>
+              ) : (
+                <span class="name">{localized(name, locale)}</span>
+              )}
+
+              <span class="meta label-mono">
+                {credentialMeta(issuer, date, hours)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
+    )
+  }
+</Section>
+
+{
+  /* Sin animación de entrada por fila, como en `Education.astro`: la sección ya
+     se revela entera con `animation-timeline: view()` y una segunda entrada
+     dentro fundía el contenido dos veces. */
+}
+
+<style>
+  /* La escala de la sección, antes que la lista. Va pegada al filete de la
+     primera fila para que se lea como su cabecera y no como un dato más. */
+  .cert-summary {
+    color: var(--text-faint);
+    margin: 0 0 0.5rem;
+  }
+
+  .certificate-list {
+    display: grid;
+    gap: 0;
+  }
+
+  /**
+   * Filas con filete, no tarjetas: es la misma decisión que en
+   * `Languages.astro`. Diecisiete cajas con superficie y radio pesarían en la página
+   * como las tarjetas de proyecto, que sí abren algo; aquí son filas
+   * estructuralmente idénticas, que es justo el caso en el que una línea se
+   * gana el sitio.
+   */
+  li {
+    align-items: baseline;
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    gap: 0.25rem 1rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 0.6rem 0.15rem;
+  }
+
+  .name {
+    color: var(--text);
+    font-size: 0.925rem;
+    font-weight: 700;
+  }
+
+  /**
+   * El nombre enlazado se distingue por el subrayado, no por el color.
+   *
+   * Teñirlo de acento haría que las filas con enlace pesaran más que las otras,
+   * y cuál se puede verificar no es lo que jerarquiza esta sección: son todas
+   * el mismo tipo de dato. El subrayado apartado dice «esto lleva a algún
+   * sitio» sin cambiar el tono de la fila.
+   */
+  a.name {
+    text-decoration: underline;
+    text-decoration-color: var(--border-hover);
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.2s ease;
+  }
+
+  @media (hover: hover) {
+    a.name:hover {
+      text-decoration-color: var(--accent);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    a.name {
+      transition: none;
+    }
+  }
+
+  /**
+   * Tipografía, cuerpo, color y tracking salen de `.label-mono` (Layout); aquí
+   * sólo se desactivan las versalitas.
+   *
+   * El renglón no es una etiqueta, son tres valores: «VIEWNEXT · 12 H · 2025»
+   * grita el nombre de la empresa y convierte la unidad de horas en otra cosa
+   * —`H` no es `h`—. En minúscula se lee como lo que hay impreso en el papel.
+   */
+  .meta {
+    text-align: right;
+    text-transform: none;
+    white-space: nowrap;
+  }
+
+  /* El resto del aspecto del desplegable —el chevrón, su giro, el hover con
+     halo, la apertura al imprimir— sale del bloque global de `.job-details` en
+     `Layout.astro`. Aquí sólo queda el hueco bajo la última fila. */
+  .cert-details {
+    margin-top: 0.35rem;
+  }
+
+  @media (width <= 480px) {
+    /* El nombre manda la fila entera y el emisor cae debajo: a 320 px, dos
+       columnas partían «Diseño responsive con Bootstrap» por la mitad. */
+    li {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .meta {
+      text-align: left;
+    }
+  }
+
+  /* Sólo en papel, y sólo en el perfil recortado. */
+  .pdf-focused-certs {
+    display: none;
+  }
+
+  @media print {
+    :global(:root[data-pdf-profile="focused"]) .pdf-focused-certs {
+      color: var(--text-subtle);
+      display: block;
+      font-size: 0.72rem;
+      line-height: 1.4;
+      margin: 0;
+    }
+
+    /**
+     * Una columna en papel, y eran dos.
+     *
+     * Dos columnas ahorraban media hoja, pero el orden visual de una rejilla no
+     * es el orden del documento: los extractores de texto que usan los portales
+     * de empleo leen el HTML de arriba abajo y devolvían las diecisiete filas
+     * intercaladas en zigzag —«Curso A, Curso J, Curso B, Curso K»—. Con la
+     * lista fuera del PDF recortado, el espacio que costaba ya no se paga.
+     */
+    .certificate-list {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    li {
+      gap: 0 0.6rem;
+      padding: 0.2rem 0.45rem;
+    }
+
+    /* En papel salen las diecisiete, plegadas o no: el pliegue existe porque la
+       página tiene scroll y la hoja no, y esconder trece certificados de un ATS
+       sería otra cosa. Lo fuerza el `@media print` de `.job-details` en
+       `Layout.astro`; aquí sólo se recupera el hueco. */
+    .cert-details {
+      margin-top: 0;
+    }
+
+    /**
+     * En papel el enlace no imprime su URL, a diferencia del de proyecto.
+     *
+     * `printableUrl` funciona ahí porque es **una** dirección corta por
+     * proyecto. Aquí serían siete direcciones largas de catálogo, y el PDF tiene
+     * que caber en una A4 —lo comprueba `check-cv-pdf.mjs`—, así que imprimirlas
+     * rompería el documento entero por un dato que quien lo lea en papel no
+     * puede pulsar igualmente. Quien las quiera las tiene en `/cv.json`, que es
+     * donde vive el CV legible por máquinas y que **sí** las sirve.
+     */
+    a.name {
+      text-decoration: none;
+    }
+  }
+</style>

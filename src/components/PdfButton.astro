@@ -1,0 +1,65 @@
+---
+/**
+ * Descarga el CV en PDF del idioma actual.
+ *
+ * Es un enlace y no un botón: el archivo existe como recurso propio
+ * (`/cv.pdf`, `/ca/cv.pdf`, `/en/cv.pdf`), así que se puede abrir en una
+ * pestaña, copiar la dirección o compartirla. Lo genera
+ * `scripts/build-cv-pdf.mjs` desde el `@media print` de la propia web.
+ *
+ * Es el único acceso al CV desde la barra. Estuvo al lado de un botón que abría
+ * el diálogo de impresión del navegador; se quitó porque decía lo mismo con un
+ * rodeo, y `Ctrl+P` sigue funcionando —la hoja `@media print` está intacta—.
+ */
+import type { Locale } from "@/cv"
+import { localizedPath, t } from "@/lib/i18n"
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+const label = t(locale, "downloadPdf")
+---
+
+<a
+  class="bar-control pdf-button"
+  href={localizedPath(locale, "/cv.pdf")}
+  download
+  aria-label={label}
+  title={label}
+>
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 24 24"
+    width="19"
+    height="19"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
+    <path d="M14 3v5h5"></path>
+    <path d="M12 12v5"></path>
+    <path d="m9.5 14.5 2.5 2.5 2.5-2.5"></path>
+  </svg>
+</a>
+
+<style>
+  /* Cuadrado de 44, el mínimo táctil de la WCAG. La caja, el hover y el respeto
+     por `prefers-reduced-motion` son de `.bar-control`, en Layout. */
+  .pdf-button {
+    flex: 0 0 44px;
+    height: 44px;
+    padding: 0;
+    width: 44px;
+  }
+
+  @media print {
+    .pdf-button {
+      display: none !important;
+    }
+  }
+</style>

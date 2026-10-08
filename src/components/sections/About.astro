@@ -1,0 +1,102 @@
+---
+import Section from "../Section.astro"
+import ArrowRight from "@/icons/arrow-right.astro"
+import type { CvData, Locale } from "@/cv"
+import { localized, t } from "@/lib/i18n"
+import { publicPagePath } from "@/lib/publicPages"
+import { sectionId, sectionTitle } from "@/lib/sections"
+
+interface Props {
+  locale: Locale
+  cv: Readonly<CvData>
+}
+
+const { locale, cv } = Astro.props
+---
+
+<Section
+  id={sectionId("about")}
+  title={sectionTitle("about", locale)}
+  printTitle={t(locale, "sectionAboutPrint")}
+>
+  {
+    /* Dos voces, como en cada empleo: la web habla en primera persona y el
+      currículum en papel no. Ver la nota larga en `Experience.astro`. */
+  }
+  {
+    cv.basics.summaryPrint ? (
+      <>
+        <p class="summary no-print">{localized(cv.basics.summary, locale)}</p>
+        <p class="summary print">{localized(cv.basics.summaryPrint, locale)}</p>
+      </>
+    ) : (
+      <p class="summary">{localized(cv.basics.summary, locale)}</p>
+    )
+  }
+  <a
+    class="bracket-link about-link no-print"
+    href={publicPagePath("about", locale)}
+    data-about-cta
+  >
+    <span class="bracket-link__bracket" aria-hidden="true">[</span>
+    <span>{t(locale, "aboutMore")}</span>
+    <span class="bracket-link__arrow" aria-hidden="true">
+      <ArrowRight />
+    </span>
+    <span class="bracket-link__bracket" aria-hidden="true">]</span>
+  </a>
+</Section>
+
+<style>
+  .summary {
+    max-width: 78ch;
+    color: var(--text-muted);
+    font-size: clamp(1rem, 1.6vw, 1.075rem);
+    line-height: 1.75;
+  }
+
+  /**
+   * El enlace estuvo escondido, y ya no.
+   *
+   * Se ganaba enfocando el retrato del hero —mantener pulsado hasta que las
+   * escuadras se cierran, ver `Hero.astro` y `portraitFocus.ts`— y hasta
+   * entonces no se pintaba. Tenía sentido mientras el resumen de esta sección
+   * contaba la historia entera: quien pasaba de largo ya se llevaba lo
+   * importante y el secreto sólo premiaba a quien insistía.
+   *
+   * Con el resumen en tres líneas eso deja de ser verdad. Lo que hay detrás del
+   * enlace —el recorrido, cómo trabaja, de dónde salen los proyectos— pasa a
+   * ser la única versión larga que existe, y una página que casi nadie puede
+   * alcanzar no es un secreto: es una página perdida.
+   *
+   * El visor **no** se ha quitado: sigue abriendo «Antes de programar» en el
+   * historial laboral (ver `Experience.astro`), que es donde un huevo de pascua
+   * encaja —un dato de más para quien mira de cerca— y no en el camino a la
+   * mitad del contenido del sitio.
+   */
+  /**
+   * La caja la pone `.bracket-link` en `Layout.astro`, el mismo control que
+   * lleva el `[ ← VOLVER AL PORTFOLIO ]` de las tres landings. Entrar y salir se
+   * dicen igual, que era la mitad del sentido de tener corchetes.
+   *
+   * De paso gana lo que aquí faltaba: el halo al pasar por encima y la
+   * transición del corchete, que hasta ahora daba un salto seco de color.
+   *
+   * Lo único suyo es el fondo. Esto no está sobre un bloque de cabecera como en
+   * las landings, sino al final de un párrafo de texto corrido: con superficie
+   * se leería como una tarjeta metida en la lectura, y transparente se lee como
+   * lo que es, el final de la frase.
+   */
+  .about-link {
+    background: transparent;
+    margin-top: 1rem;
+  }
+
+  @media print {
+    .summary {
+      max-width: none;
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+  }
+</style>

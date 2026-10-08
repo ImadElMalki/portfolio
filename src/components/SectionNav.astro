@@ -1,0 +1,348 @@
+---
+import type { Locale } from "@/cv"
+import { t } from "@/lib/i18n"
+import { navSections, sectionOrdinal, SECTION_TOTAL } from "@/lib/sections"
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+---
+
+{
+  /**
+   * El ordinal viaja en un `data-*` y no se calcula en el cliente.
+   *
+   * `sectionOrdinal` vive en `sections.ts`, que arrastra `t()` y con él —según
+   * cómo se importe— zod y `astro:i18n`. Eso ya disparó una vez el paquete de
+   * cliente de 13 KB a 51 KB, y está escrito en `check-build.mjs`. Aquí estamos
+   * en el servidor, donde importar sale gratis: el guion sólo lee el atributo.
+   */
+}
+<nav
+  class="section-nav no-print"
+  aria-label={t(locale, "cvSections")}
+  data-section-total={SECTION_TOTAL}
+>
+  <ul>
+    {
+      navSections(locale).map(({ id, label }) => (
+        <li>
+          <a
+            href={`#${id}`}
+            data-section-link
+            data-section-id={id}
+            data-section-ordinal={sectionOrdinal(id)}
+          >
+            <span class="dot" aria-hidden="true" />
+            <span class="label">{label}</span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</nav>
+
+<script>
+  import { onPageLoad } from "@/lib/pageLifecycle"
+
+  onPageLoad((signal) => {
+    const links = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>("[data-section-link]"),
+    )
+
+    if (links.length === 0) return
+
+    const sections = links
+      .map((link) => document.getElementById(link.dataset.sectionId ?? ""))
+      .filter((section): section is HTMLElement => section !== null)
+
+    /**
+     * El rótulo de la barra de utilidades, que vive en `Layout.astro`.
+     *
+     * Lo escribe este guion y no uno propio porque el dato —qué sección se está
+     * mirando— ya se calcula aquí, y montar un segundo observador de scroll para
+     * repetir la misma cuenta sería pagar dos veces por lo mismo.
+     *
+     * Puede no existir: la barra sale en las cinco páginas del sitio y el índice
+     * sólo en las tres portadas. Se comprueba una vez y no en cada llamada.
+     */
+    const readout = document.querySelector<HTMLElement>("[data-bar-section]")
+    /**
+     * El contador `03/07`, al lado del anterior.
+     *
+     * Sale de aquí por el mismo motivo que el nombre: la sección activa ya está
+     * calculada. El denominador lo trae el `<nav>` desde el servidor, así que
+     * añadir una sección al CV mueve las dos mitades solas.
+     */
+    const counter = document.querySelector<HTMLElement>("[data-bar-count]")
+    const total =
+      document.querySelector<HTMLElement>("[data-section-total]")?.dataset
+        .sectionTotal ?? ""
+
+    let activeId: string | undefined
+
+    const setActive = (id: string | undefined) => {
+      // `sync()` corre en cada fotograma de scroll, pero el índice sólo se toca
+      // cuando la sección cambia de verdad: el rótulo y el contador no tienen
+      // por qué reescribirse sesenta veces por segundo con el mismo texto.
+      if (id === activeId) return
+      activeId = id
+
+      /* Sin sección activa el rótulo se vacía en vez de quedarse con la
+         anterior: el CSS esconde el separador con `:not(:empty)`, así que la
+         barra vuelve sola a enseñar sólo la firma. */
+      if (!id && readout) readout.textContent = ""
+      if (!id && counter) counter.textContent = ""
+
+      for (const link of links) {
+        const isActive = link.dataset.sectionId === id
+
+        if (isActive) link.setAttribute("aria-current", "location")
+        else link.removeAttribute("aria-current")
+
+        /* El título traducido sale del propio enlace del índice —lo pinta
+           `navSections(locale)`— en vez de volver a resolverlo: así el rótulo no
+           puede decir algo distinto de lo que dice el índice. */
+        if (isActive && readout) {
+          readout.textContent = link.querySelector(".label")?.textContent ?? ""
+        }
+
+        /* El hero y contacto no llevan número —uno es la portada y el otro no
+           está en el CV—, así que ahí el contador se vacía en vez de inventarse
+           un `00`. */
+        if (isActive && counter) {
+          const ordinal = link.dataset.sectionOrdinal
+          counter.textContent = ordinal && total ? `${ordinal}/${total}` : ""
+        }
+      }
+    }
+
+    const sectionOffset = () => {
+      const scrollMargin = sections[0]
+        ? Number.parseFloat(getComputedStyle(sections[0]).scrollMarginTop)
+        : 0
+
+      return Number.isFinite(scrollMargin) ? scrollMargin : 0
+    }
+
+    const currentSectionId = () => {
+      const atBottom =
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 2
+
+      if (atBottom) return sections.at(-1)?.id
+
+      const offset = sectionOffset() + 1
+      let current = sections[0]
+
+      // La sección activa es la última cuyo inicio ya ha cruzado la misma línea
+      // que usan los enlaces con `scroll-margin-top`. Así una sección corta no
+      // cede el estado a la siguiente solo porque no alcance el centro.
+      for (const section of sections) {
+        if (section.getBoundingClientRect().top > offset) break
+        current = section
+      }
+
+      return current?.id
+    }
+
+    let selectedByClick: string | undefined
+    let frame: number | undefined
+    let scrollEndTimer: number | undefined
+
+    const sync = () => {
+      frame = undefined
+      if (selectedByClick) return
+
+      /* Aquí hubo una guardia para las vistas Markdown y consola, que dejaban
+         la página sin secciones a la vista. Se fueron el 06-10-2026: la única
+         vista es la web. */
+      setActive(currentSectionId())
+    }
+
+    const scheduleSync = () => {
+      if (frame !== undefined) return
+      frame = window.requestAnimationFrame(sync)
+    }
+
+    const finishNavigation = () => {
+      selectedByClick = undefined
+      window.clearTimeout(scrollEndTimer)
+      scheduleSync()
+    }
+
+    for (const link of links) {
+      link.addEventListener("click", () => {
+        selectedByClick = link.dataset.sectionId
+        setActive(selectedByClick)
+      })
+    }
+
+    // Los tres cuelgan de `window`, así que van con `signal`:
+    // desmontar el índice los suelta todos a la vez.
+    window.addEventListener(
+      "scroll",
+      () => {
+        if (selectedByClick) {
+          // `scrollend` todavía no está en todos los navegadores. Este debounce
+          // libera igualmente la selección cuando termina el desplazamiento.
+          window.clearTimeout(scrollEndTimer)
+          scrollEndTimer = window.setTimeout(finishNavigation, 140)
+          return
+        }
+
+        scheduleSync()
+      },
+      { passive: true, signal },
+    )
+    window.addEventListener("scrollend", finishNavigation, { signal })
+    window.addEventListener("resize", scheduleSync, { passive: true, signal })
+
+    // El fotograma y el temporizador pendientes no los cancela el `signal` por
+    // su cuenta: se dispararían después de desmontar.
+    signal.addEventListener("abort", () => {
+      if (frame !== undefined) window.cancelAnimationFrame(frame)
+      window.clearTimeout(scrollEndTimer)
+    })
+
+    scheduleSync()
+  })
+</script>
+
+<style>
+  .section-nav {
+    display: none;
+  }
+
+  /* Sólo cuando hay margen libre a los lados del contenido (920px + padding). */
+  @media (width >= 1200px) {
+    .section-nav {
+      display: block;
+      left: max(1.25rem, calc(50% - 34.5rem));
+      position: fixed;
+      top: 50%;
+      translate: 0 -50%;
+      z-index: 50;
+    }
+  }
+
+  ul {
+    display: flex;
+    flex-direction: column;
+    /* El área pulsable ya reserva su propio hueco: con separación además, el
+       índice crecería sin que el punto se moviera. */
+    gap: 0;
+  }
+
+  /* 24×24 es el mínimo de la WCAG 2.2 (2.5.8). El punto seguía midiendo 8×17 con
+     un paso de 23 px, así que ni llegaba al tamaño ni se salvaba por la
+     excepción de separación. El punto no se mueve: sigue pegado a la izquierda y
+     centrado en vertical dentro de un área que ahora sí se puede acertar. */
+  a {
+    align-items: center;
+    display: flex;
+    min-height: 24px;
+    min-width: 24px;
+    position: relative;
+  }
+
+  /* `--text-faint` y no `--border-hover`: los puntos son la única señal visible
+     del índice, y a 1.68:1 en claro no llegaban al 3:1 que pide la WCAG 2.2
+     (1.4.11) para un elemento gráfico que hace falta entender. */
+  /* Segmento recto y no pastilla: es el indicador de nivel de un instrumento
+     Nothing. La clase se queda con el nombre de cuando era un punto. */
+  .dot {
+    background: var(--text-faint);
+    border-radius: 0;
+    height: 3px;
+    /* El ancho se estira con el muelle de la casa (`--ease-spring`, en
+       `Layout.astro`). Lo animaba Motion desde el guion; desde el 02-10-2026 es
+       esta transición, y el guion sólo cambia `aria-current`. Propiedades
+       sueltas y no el atajo: si el navegador no entiende `linear()`, cae la
+       curva y no la transición entera. */
+    transition-duration: 200ms, var(--spring-duration);
+    transition-property: background-color, width;
+    transition-timing-function: ease, var(--ease-spring);
+    width: 8px;
+  }
+
+  a[aria-current="location"] .dot {
+    background: var(--accent);
+    /* El segmento activo se enciende con el mismo neón de tinta que los
+       controles de la barra. */
+    box-shadow: 0 0 8px var(--glow-ink);
+    width: 20px;
+  }
+
+  .label {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    /* `--shadow` está calibrada para una tarjeta de 920 px: sobre un rótulo de
+       26 px de alto no se ve, y la etiqueta se apoya encima del texto de la
+       página, así que necesita separarse de verdad. */
+    box-shadow: var(--shadow-raised);
+    color: var(--text);
+    font-size: 0.78rem;
+    font-weight: 600;
+    left: 1.9rem;
+    opacity: 0;
+    padding: 0.3rem 0.55rem;
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    transition:
+      border-color 160ms ease,
+      box-shadow 220ms ease,
+      opacity 160ms ease,
+      translate 160ms ease;
+    translate: -0.35rem -50%;
+    white-space: nowrap;
+  }
+
+  /* Por enlace y no por carril: `.section-nav` es una sola caja de 24×168, así
+     que apuntar a un punto sacaba las siete etiquetas a la vez. Con
+     `ul { gap: 0 }` cada píxel del carril pertenece a un enlace, de modo que no
+     hay zonas muertas ni parpadeo al pasar de un punto al siguiente.
+
+     El foco va fuera del guardián de hover: en una máquina táctil con teclado,
+     dentro, se quedaría sin etiquetas. */
+  /* El rótulo se enciende con la misma receta que el resto de los controles del
+     sitio —filete vivo y halo—, sumada a su elevación en vez de sustituirla: es
+     una etiqueta que flota sobre el texto de la página y sin la sombra se
+     pegaría al fondo. Aquí no hay relleno que cambiar: el carril nunca lo tuvo. */
+  a:focus-visible .label {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-raised), var(--glow-hover);
+    opacity: 1;
+    translate: 0 -50%;
+  }
+
+  @media (hover: hover) {
+    a:hover .dot {
+      background: var(--text-subtle);
+    }
+
+    a:hover .label {
+      border-color: var(--border-hover);
+      box-shadow: var(--shadow-raised), var(--glow-hover);
+      opacity: 1;
+      translate: 0 -50%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot,
+    .label {
+      transition: none;
+    }
+  }
+
+  @media print {
+    .section-nav {
+      display: none !important;
+    }
+  }
+</style>

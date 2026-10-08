@@ -1,0 +1,433 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# En una rama de PR, un push nuevo cancela la ejecución anterior: nadie va a
+# mirar su resultado. En `main` no: la ejecución cancelada puede estar a mitad de
+# `deploy-production`, y ya pasó el 04-09-2026 con `2589c35`. En `main` la que
+# está en marcha termina siempre; la siguiente espera, y si mientras tanto llega
+# otra, la que esperaba cede su sitio a la más reciente, que es la que importa.
+concurrency:
+  group: portfolio-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # La imagen de los contenedores de `visual` y `lighthouse` tiene que ser la de
+  # la versión de Playwright del lockfile, igual que en `visual-docker.mjs` y
+  # `lighthouse-docker.mjs`. Estaba escrita a mano aquí y derivada allí: subir
+  # `@playwright/test` cambiaba la imagen en local y no en la CI, y el
+  # renderizado de texto —la razón de todo el montaje en contenedor— dejaba de
+  # ser el mismo en los dos sitios (OPS-10). `container.image` se evalúa antes
+  # de los pasos, así que la versión tiene que llegar por `needs`.
+  versions:
+    name: Resolve tool versions
+    runs-on: ubuntu-latest
+    outputs:
+      playwright: ${{ steps.playwright.outputs.version }}
+    steps:
+      - name: Checkout the lockfile
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: package-lock.json
+          sparse-checkout-cone-mode: false
+
+      - name: Resolve Playwright version
+        id: playwright
+        run: >-
+          echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")"
+          >> "$GITHUB_OUTPUT"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Con la historia entera, por dos motivos:
+      #
+      # - `npm run scan:secrets` corre Gitleaks en modo `git`, y con el clon
+      #   superficial por defecto sólo veía **el último commit** de cada push:
+      #   un secreto añadido en un commit intermedio y borrado en el siguiente
+      #   pasaba sin que nadie lo viera.
+      # - el `lastmod` del sitemap sale del último commit que tocó los datos de
+      #   cada página, y éste es el job cuyo `dist/` se despliega.
+      #
+      # No vale `filter: blob:none`: Gitleaks corre en un contenedor sin red y
+      # necesita el contenido de cada versión.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Scan repository history for secrets
+        run: npm run scan:secrets
+
+      - name: Audit production dependencies
+        run: npm run audit:prod
+
+      - name: Check formatting
+        run: npm run format:check
+
+      # `astro check` no mira `functions/`: allí mandan los tipos de Workers, que
+      # no son los del navegador. Se comprueba con su propio tsconfig.
+      - name: Type-check Pages Functions
+        run: npm run check:functions
+
+      - name: Verify generated Cloudflare bindings
+        run: npm run check:bindings
+
+      - name: Run tests
+        run: npm test
+
+      # El build de release genera los PDF con Chromium entre el build fuente y
+      # el build final, así que el navegador debe existir antes de construir.
+      - name: Resolve Playwright version
+        id: playwright
+        run: >-
+          echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")"
+          >> "$GITHUB_OUTPUT"
+
+      - name: Cache browsers
+        id: browser-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install browsers for UI and PDF verification
+        run: >-
+          npx playwright install --with-deps
+          ${{ steps.browser-cache.outputs.cache-hit == 'true' && '--only-shell' || '' }}
+          chromium webkit
+
+      - name: Install independent PDF text extractor
+        run: sudo apt-get update && sudo apt-get install --yes poppler-utils
+
+      - name: Build and inspect dist
+        run: npm run build
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+
+      # Los PDF no se versionan: `npm run build` los genera en cada tanda y son
+      # éstos, los del artefacto, los que se despliegan. `check-build.mjs` ya
+      # comprueba que el manifiesto, `public/` y `dist/` salen de la misma tanda.
+      - name: Verify best-effort CV extraction with PDF.js and Poppler
+        run: npm run cv:pdf:ats
+
+      # Sólo internos: un tercero caído no puede bloquear una publicación que no
+      # ha tocado su enlace. Las URL externas las repasa cada semana
+      # `scheduled.yml`, que avisa sin frenar nada.
+      - name: Check internal links and anchors
+        run: npm run check:links -- --internal
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+
+      # Sobre `dist/` y sin ningún binding: lo que se comprueba es la
+      # degradación que los tres endpoints tienen escrita para cuando no están
+      # configurados, que es justo el escenario que la CI puede reproducir.
+      - name: Smoke-test Pages Functions
+        run: npm run test:functions
+
+      - name: Run browser tests
+        run: npm run test:browser
+
+      - name: Write commit-bound deployment manifest
+        run: npm run deployment:manifest
+        env:
+          DEPLOY_COMMIT: ${{ github.sha }}
+
+      # También en los PR: el job de preview despliega este mismo artefacto, así
+      # que se revisa lo que ya pasó las pruebas y no una reconstrucción distinta.
+      - name: Preserve verified artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: portfolio-dist-${{ github.sha }}
+          path: dist
+          retention-days: 1
+          if-no-files-found: error
+
+  # Las capturas de referencia dependen del renderizado de texto, así que corren
+  # en la misma imagen que `npm run test:visual` usa en local. Una
+  # `ubuntu-latest` pelada tiene otras fuentes y las referencias no coincidirían.
+  visual:
+    name: Visual regression
+    needs: versions
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.versions.outputs.playwright }}-noble
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+
+      - name: Compare against the committed references
+        run: npx playwright test tests/browser/visual.spec.ts --project=chromium-desktop
+        env:
+          VISUAL: "1"
+
+      - name: Publish the differences
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: visual-diff-${{ github.sha }}
+          path: test-results
+          retention-days: 3
+          if-no-files-found: ignore
+
+  # Los umbrales viven en `scripts/budgets.mjs` (`HOME_RUNTIME_BUDGET`) y son los
+  # mismos que en local. El job **bloquea** desde el 01-10-2026 y los dos
+  # despliegues lo esperan (`OPS-09`): hasta entonces fue informativo, porque la
+  # portada medía aquí 2.938 ms de LCP frente a los 2.500 del techo. El PR #2 la
+  # bajó a 2.124 ms con las fuentes de pantalla variables, el retrato en AVIF y
+  # el CSS incrustado (`PERF-03`), y lo midió dos veces seguidas por debajo.
+  #
+  # El LCP, las peticiones y los bytes se juzgan en la tanda mediana por LCP; el
+  # CLS, por su propia mediana. El TBT sólo avisa (`::warning::`): Lighthouse lo
+  # simula con la CPU ×4, y con el mismo `dist/` dio 244/35/0 ms en una ejecución
+  # y 158/204/531 en la siguiente. Un techo que suspende por el runner convierte
+  # cada push en la tirada de dados contra la que ya prevenía `OPS-09`.
+  #
+  # `--ipc=host` no es decorativo: sin él el contenedor se queda con los 64 MiB
+  # de `/dev/shm` por defecto, el renderer de Chrome muere y Lighthouse aborta
+  # con `NO_FCP` o «Browser tab has unexpectedly crashed» antes de medir nada.
+  # Así estuvo desde que se añadió el job. El camino local no lo sufría porque el
+  # `docker run` de `lighthouse-docker.mjs` ya pasaba la opción; aquí el
+  # contenedor lo crea Actions. Se arregla por aquí y no con
+  # `--disable-dev-shm-usage` para que las banderas de Chrome sigan siendo las
+  # mismas en los dos sitios y las cifras se puedan comparar.
+  lighthouse:
+    name: Lighthouse budget
+    needs: versions
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.versions.outputs.playwright }}-noble
+      options: --ipc=host
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+
+      # Ya estamos dentro de la imagen, así que el script no debe lanzar Docker.
+      #
+      # Tres tandas y la mediana por LCP (`scripts/lighthouse-docker.mjs`). Si
+      # algo se pasa del techo, el paso falla y nombra qué; el script imprime
+      # antes el JSON de resultados, así que las cifras siguen en el log. El
+      # informe completo de esa tanda y el resumen de las tres se suben como
+      # artefacto, también en rojo: es la forma de leer el desglose del LCP sin
+      # Docker en local.
+      - name: Measure the home page against the budget
+        run: npm run test:lighthouse
+        env:
+          LIGHTHOUSE_IN_CONTAINER: "1"
+          LIGHTHOUSE_REPORT_DIR: lighthouse-report
+
+      - name: Keep the median Lighthouse report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lighthouse-${{ github.sha }}
+          path: lighthouse-report
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Una URL por PR: en un proyecto donde casi todo lo que se cambia es visual,
+  # revisar mirando la página gana a revisar leyendo la descripción del PR.
+  # Cloudflare Pages sirve cada rama en su propio subdominio, así que basta con
+  # desplegar el artefacto ya verificado con `--branch` distinto de `main`.
+  #
+  # `github.repository`: desde el 07-10-2026 el código vive también en una copia
+  # pública (`scripts/export-public.mjs`). Allí interesa que corran build,
+  # visual y Lighthouse —son lo que demuestra cómo está hecho—, y no que nada
+  # despliegue: sin los secretos el paso fallaría, y con ellos desplegaría el
+  # sitio de verdad desde un repo que cualquiera puede bifurcar. Lo mismo en
+  # producción.
+  deploy-preview:
+    name: Deploy PR preview to Cloudflare Pages
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.repository == 'ImadElMalki/minimalist-portfolio'
+    needs: [build, visual, lighthouse]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout deployment tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install pinned Wrangler
+        run: npm ci
+
+      - name: Download verified artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: portfolio-dist-${{ github.sha }}
+          path: dist
+
+      # Recalcula la huella del `dist/` descargado y la compara con la que
+      # `build` dejó dentro del propio artefacto. Sin este paso el manifiesto
+      # documentaba la procedencia pero no la imponía.
+      - name: Verify the artifact matches its manifest
+        run: npm run deployment:verify
+        env:
+          DEPLOY_COMMIT: ${{ github.sha }}
+
+      # Antes de subir el código, no después: si una migración falla, mejor que
+      # el preview se quede en la versión anterior a que sirva código que espera
+      # un esquema que la base no tiene. Ver el paso equivalente de producción.
+      - name: Apply pending D1 migrations to the preview database
+        run: >-
+          npx --no-install wrangler d1 migrations apply RATE_LIMIT_DB
+          --remote --env preview
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      # La URL de la rama se lee de la salida de Wrangler y no se compone aquí.
+      # Se componía con el nombre del proyecto, y el subdominio de Pages no lo
+      # es: el proyecto `minimalist-portfolio` vive en
+      # `minimalist-portfolio-btc.pages.dev`, así que el comentario enlazaba un
+      # 404 de otro sitio. Se notó el 01-10-2026, cuando PageSpeed midió esa
+      # página de error en vez de la vista previa. `pipefail` porque el `tee`
+      # se tragaría un fallo del despliegue.
+      - name: Deploy with Wrangler Direct Upload
+        id: deploy
+        run: |
+          set -o pipefail
+          npx --no-install wrangler pages deploy dist \
+            --project-name="${{ vars.CLOUDFLARE_PAGES_PROJECT }}" \
+            --branch="${{ github.head_ref }}" \
+            --commit-hash="${{ github.event.pull_request.head.sha }}" \
+            | tee wrangler-deploy.log
+          url=$(grep -oE 'Deployment alias URL: https://[^ ]+' wrangler-deploy.log | tail -n 1 | cut -d' ' -f4)
+          if [ -z "$url" ]; then
+            url=$(grep -oE 'https://[a-z0-9-]+\.[a-z0-9-]+\.pages\.dev' wrangler-deploy.log | tail -n 1)
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Comment the preview URL
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          preview="Preview: ${PREVIEW_URL:-sin URL: Wrangler no la imprimió, mirar el paso de despliegue}"
+          gh pr comment "${{ github.event.pull_request.number }}" --edit-last --create-if-none \
+            --body "$(printf '%s\n\n%s' \
+              "$preview" \
+              "El entorno de preview no lleva secretos a propósito, así que \`/api/ask\`, \`/api/contact\` y \`/api/hit\` responden degradado (503 o 204). La revisión por PR es visual.")"
+
+  deploy-production:
+    name: Deploy production to Cloudflare Pages
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      github.repository == 'ImadElMalki/minimalist-portfolio'
+    needs: [build, visual, lighthouse]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout deployment tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install pinned Wrangler
+        run: npm ci
+
+      - name: Download verified artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: portfolio-dist-${{ github.sha }}
+          path: dist
+
+      - name: Verify the artifact matches its manifest
+        run: npm run deployment:verify
+        env:
+          DEPLOY_COMMIT: ${{ github.sha }}
+
+      # `pages deploy` **no** aplica migraciones de D1: Direct Upload sube los
+      # archivos y nada más. `wrangler.jsonc` declara `migrations_dir` desde el
+      # 31-08-2026 y eso se leía como que algo, en algún momento, las aplicaba;
+      # no lo hacía nadie, y `0001_rate_limit_counters.sql` está en producción
+      # porque se aplicó a mano.
+      #
+      # El modo de fallo de la siguiente no es sutil: código que espera un
+      # esquema que la base no tiene cae en el `catch` de `rateLimit.ts`, que
+      # devuelve `unavailable`, y eso es 503 a la vez en `/api/ask` y
+      # `/api/contact`. Es el `OPS-12` de `AUDIT-2026-09-11.md`.
+      #
+      # Antes del despliegue y no después: una migración fallida deja el sitio
+      # servido en la versión anterior en vez de servir código sin su esquema.
+      # En CI no hay confirmación interactiva, y wrangler captura copia igual.
+      - name: Apply pending D1 migrations to the production database
+        run: >-
+          npx --no-install wrangler d1 migrations apply RATE_LIMIT_DB
+          --remote --env production
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      # Desde la raíz del repositorio a propósito: con `wrangler.jsonc` presente,
+      # ese archivo es la fuente de verdad de bindings, fecha y flags de
+      # compatibilidad, y el panel deja de poder editarlos. Desplegar desde otra
+      # carpeta publicaría el código sin `RATE_LIMIT_DB` ni `enable_request_signal`,
+      # y entonces `/api/ask` y `/api/contact` responden 503 en frío.
+      - name: Deploy with Wrangler Direct Upload
+        run: >-
+          npx --no-install wrangler pages deploy dist
+          --project-name="${{ vars.CLOUDFLARE_PAGES_PROJECT }}"
+          --branch=main
+          --commit-hash="${{ github.sha }}"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

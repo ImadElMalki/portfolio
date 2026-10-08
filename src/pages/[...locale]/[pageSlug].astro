@@ -1,0 +1,20 @@
+---
+import AboutLanding from "@/components/about/AboutLanding.astro"
+import ServicesLanding from "@/components/services/ServicesLanding.astro"
+import PrivacyLanding from "@/components/privacy/PrivacyLanding.astro"
+import ProjectsLanding from "@/components/projects/ProjectsLanding.astro"
+import { publicPageStaticPaths, type PublicPage } from "@/lib/publicPages"
+
+export const getStaticPaths = () => publicPageStaticPaths()
+
+const { locale, page } = Astro.props
+const COMPONENTS = {
+  about: AboutLanding,
+  services: ServicesLanding,
+  privacy: PrivacyLanding,
+  projects: ProjectsLanding,
+} as const satisfies Record<PublicPage, typeof AboutLanding>
+const Component = COMPONENTS[page]
+---
+
+<Component locale={locale} />

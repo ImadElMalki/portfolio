@@ -1,0 +1,9 @@
+# Valores locales de ejemplo. Copia este archivo a `.dev.vars` y rellénalo;
+# `.dev.vars` está ignorado por Git.
+OPENAI_API_KEY=
+ASK_DOSSIER=
+CF_ACCOUNT_ID=
+EMAIL_API_TOKEN=
+CONTACT_TO=
+CONTACT_FROM=
+RATE_LIMIT_SALT=

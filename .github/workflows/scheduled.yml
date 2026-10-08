@@ -1,0 +1,82 @@
+name: Scheduled checks
+
+# Lo que cambia sin que cambie el repositorio: un enlace de un tercero que se
+# rompe, un aviso de seguridad nuevo en una dependencia. Ninguna de las dos
+# cosas debe esperar al siguiente push para saberse, ni bloquear ese push
+# cuando llegue: el 30-09-2026 `npm audit` llevaba días fallando en silencio y
+# el siguiente despliegue se habría quedado en ese paso (OPS-14, OPS-16).
+#
+# Una ejecución roja aquí manda el aviso de GitHub por correo y no detiene nada.
+
+on:
+  schedule:
+    # Los lunes a las 06:17 UTC: fuera de la hora en punto, que es cuando
+    # GitHub acumula más ejecuciones programadas y más se retrasan.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Production dependencies audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      # `npm audit` sólo necesita el lockfile: no hace falta instalar nada.
+      - name: Audit production dependencies
+        run: npm run audit:prod
+
+  links:
+    name: External links
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      # El HTML basta para sacar los enlaces: sin PDF ni comprobaciones de
+      # salida, que ya corren en cada push.
+      - name: Build the static site
+        run: npx --no-install astro build
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+
+      - name: Check external links
+        run: npm run check:links -- --external
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+
+  health:
+    name: Production configuration
+    runs-on: ubuntu-latest
+    steps:
+      # El sitio no depende de sus Functions: sin un secreto, el asistente
+      # responde 503 y la interfaz ofrece el buzón. Esa degradación es la que
+      # hace que un despliegue mal configurado no se note, así que se pregunta.
+      # Lo que devuelve son booleanos —ver `functions/api/health.ts`—, por eso
+      # el cuerpo se imprime tal cual.
+      - name: Probe /api/health
+        run: |
+          code=$(curl -sS --max-time 20 -o body.json -w '%{http_code}' "${SITE_URL%/}/api/health")
+          cat body.json
+          echo
+          test "$code" = "200"
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}

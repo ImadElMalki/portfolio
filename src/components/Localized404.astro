@@ -1,0 +1,163 @@
+---
+import Layout from "@/layouts/Layout.astro"
+import { getCv, type Locale } from "@/cv"
+import { localizedPath, LOCALE_NAMES, LOCALES, t } from "@/lib/i18n"
+import { publicPagePath } from "@/lib/publicPages"
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+const cv = await getCv()
+---
+
+<Layout
+  cv={cv}
+  locale={locale}
+  title={`404 · ${t(locale, "notFoundTitle")} · ${cv.basics.name}`}
+  noindex
+>
+  <main id="main" class="not-found">
+    <p class="code">404</p>
+    <h1>{t(locale, "notFoundTitle")}</h1>
+    <p class="body">{t(locale, "notFoundBody")}</p>
+
+    <nav class="links" aria-label={t(locale, "language")}>
+      {
+        LOCALES.map((code) => (
+          <a
+            href={localizedPath(code)}
+            hreflang={code}
+            lang={code}
+            data-default={code === locale ? "" : undefined}
+          >
+            {code === locale
+              ? t(locale, "backToPortfolio")
+              : LOCALE_NAMES[code]}
+          </a>
+        ))
+      }
+    </nav>
+
+    {
+      /* Por dónde seguir, para que la 404 no sea un callejón.
+         Hasta el 06-10-2026 aquí iba la consola: quien llegaba por una URL
+         rota podía escribir `ls` y encontrar lo que buscaba. Sin ella quedan
+         los tres destinos que más se buscan —los proyectos, la presentación y
+         el CV— y la píldora del asistente, que el `Layout` pone ahora también
+         aquí para preguntar por lo que no se encuentra. */
+    }
+    <nav class="links" aria-label={t(locale, "notFoundNext")}>
+      <a href={publicPagePath("projects", locale)}>
+        {t(locale, "sectionProjects")}
+      </a>
+      <a href={publicPagePath("about", locale)}>{t(locale, "sectionAbout")}</a>
+      <a href={localizedPath(locale, "/cv.pdf")} download>
+        {t(locale, "downloadPdf")}
+      </a>
+    </nav>
+  </main>
+</Layout>
+
+<style>
+  .not-found {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    margin: 0 auto;
+    min-height: 70vh;
+    padding: clamp(2rem, 6vw, 4rem) clamp(1.25rem, 5vw, 3rem);
+    text-align: center;
+    /* El mismo ancho que el pie y que las vistas: el relleno se le suma a la
+       caja en vez de comérsela por dentro. Ver la nota larga en
+       `SiteFooter.astro`. Iba a `min(100%, var(--page-width))` y cuadraba con el
+       pie por accidente, porque el pie arrastraba el mismo defecto. */
+    width: min(100%, calc(var(--page-width) + 6rem));
+  }
+
+  /* El codigo deja de ser un rotulo y pasa a ser la pieza que se lee primero:
+     matriz de puntos al cuerpo de un titular, que es donde Doto se lee. Es la
+     misma voz que el nombre del hero, y esta pagina no tiene mas contenido con
+     el que competir. Sin `@media print`: la 404 no se imprime. */
+  .code {
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-size: clamp(2.5rem, 9vw, 4rem);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+
+  h1 {
+    font-size: clamp(2rem, 6vw, 3rem);
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    margin-top: 0.75rem;
+    text-wrap: balance;
+  }
+
+  .body {
+    margin-top: 1rem;
+    max-width: 46ch;
+    text-wrap: pretty;
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 2.25rem;
+  }
+
+  /* La segunda fila, la de los destinos, pegada a la primera, la de volver. */
+  .links + .links {
+    margin-top: 0.75rem;
+  }
+
+  .links a {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.65rem;
+    color: var(--text);
+    display: inline-flex;
+    font-size: 0.875rem;
+    font-weight: 600;
+    min-height: 44px;
+    padding: 0.65rem 0.95rem;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.22s ease;
+  }
+
+  .links a[data-default] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+
+  @media (hover: hover) {
+    .links a:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-hover);
+      box-shadow: var(--glow-hover);
+    }
+
+    .links a[data-default]:hover {
+      background: var(--accent-strong);
+      border-color: var(--accent-strong);
+      box-shadow: var(--glow-hover);
+      color: var(--bg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .links a {
+      transition: none;
+    }
+  }
+</style>

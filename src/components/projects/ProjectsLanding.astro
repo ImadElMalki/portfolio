@@ -1,0 +1,303 @@
+---
+import Layout from "@/layouts/Layout.astro"
+import ChevronLeft from "@/icons/chevron-left.astro"
+import ArrowRight from "@/icons/arrow-right.astro"
+import ProjectDialogRuntime from "@/components/projects/ProjectDialogRuntime.astro"
+import ProjectThumb from "@/components/projects/ProjectThumb.astro"
+import { PROJECT_DEMOS } from "@/data/projectDemos"
+import { getCv, type Locale } from "@/cv"
+import { PROJECTS_COPY } from "@/data/projects"
+import { localized, localizedPath, t } from "@/lib/i18n"
+import { sectionId, sectionTitle } from "@/lib/sections"
+import { projectPagePath, publicPageHrefs } from "@/lib/publicPages"
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+const cv = await getCv()
+const title = sectionTitle("projects", locale)
+
+/**
+ * El orden del archivo, sin `featured` ni pliegue.
+ *
+ * La portada enseña tres y pliega el resto porque compite con Experiencia por
+ * la atención de quien acaba de llegar. Aquí no compite con nada: quien abre
+ * `/proyectos/` ya ha decidido que quiere verlos todos, así que esconder cuatro
+ * detrás de un `<details>` sólo añadiría un clic.
+ */
+const projects = cv.projects
+---
+
+<Layout
+  cv={cv}
+  locale={locale}
+  localeHrefs={publicPageHrefs("projects")}
+  title={`${title} · ${cv.basics.name}`}
+  description={localized(PROJECTS_COPY.intro, locale)}
+  currentPage="projects"
+>
+  <main id="main" class="projects-page">
+    <header class="projects-head">
+      {
+        /* A la sección, no al principio de la portada: aquí se llega desde «Ver
+          todos los proyectos», que vive dentro de esa misma sección, y devolver
+          a quien vuelve al encabezado le obliga a bajar otra vez. El `id` sale
+          de `sectionId` y no escrito a mano, que es de donde lo saca la propia
+          sección. `AboutLanding` y `ServicesLanding` ya componen este enlace. */
+      }
+      <a
+        class="bracket-link back-link"
+        href={`${localizedPath(locale)}#${sectionId("projects")}`}
+      >
+        <span class="bracket-link__bracket" aria-hidden="true">[</span>
+        <span class="bracket-link__icon" aria-hidden="true">
+          <ChevronLeft />
+        </span>
+        <span>{t(locale, "backToPortfolio")}</span>
+        <span class="bracket-link__bracket" aria-hidden="true">]</span>
+      </a>
+      <h1>{title}</h1>
+      <p class="lead">{localized(PROJECTS_COPY.intro, locale)}</p>
+    </header>
+
+    {
+      /* Los mismos atributos que lleva la lista de la portada: de aquí saca el
+        guion de dónde traerse las fichas y cómo rotular anterior/siguiente. Van
+        en un `data-` y no en la clase porque `.project-list` arrastra además la
+        rejilla de la portada, que aquí no se quiere. Ver `ProjectDialogRuntime`. */
+    }
+    <ul
+      class="projects-index"
+      role="list"
+      data-project-details
+      data-project-details-url={localizedPath(locale, "/project-details/")}
+      data-previous-project={t(locale, "previousProject")}
+      data-next-project={t(locale, "nextProject")}
+    >
+      {
+        projects.map((project, index) => {
+          const visibleName = localized(project.name, locale)
+          const dialogId = `project-${project.id}`
+          const href = projectPagePath(project.id, locale)
+
+          return (
+            <li>
+              <article>
+                <p class="ordinal label-mono" aria-hidden="true">
+                  {String(index + 1).padStart(2, "0")}
+                </p>
+                <div class="entry">
+                  <div class="entry-heading">
+                    {/* El enlace envuelve sólo el nombre: el resto de la ficha
+                        es texto que se lee y se selecciona, no un blanco de
+                        clic gigante con un nombre accesible interminable.
+
+                        El `href` a la ficha se queda aunque el clic abra el
+                        diálogo: es lo que sostiene el sitio sin JavaScript, el
+                        clic central y el copiar-enlace, igual que en la
+                        portada. */}
+                    <h2>
+                      <a
+                        href={href}
+                        data-detail-open={dialogId}
+                        aria-haspopup="dialog"
+                      >
+                        {visibleName}
+                      </a>
+                    </h2>
+                  </div>
+
+                  <p class="entry-description">
+                    {localized(project.description, locale)}
+                  </p>
+
+                  <a
+                    class="entry-cta"
+                    href={href}
+                    data-detail-open={dialogId}
+                    tabindex="-1"
+                    aria-hidden="true"
+                  >
+                    {localized(PROJECTS_COPY.openPage, locale)}
+                    <span class="entry-cta__icon" aria-hidden="true">
+                      <ArrowRight />
+                    </span>
+                  </a>
+                </div>
+
+                {/* La primera captura, con el mismo trato que el «Ver ficha»
+                    de arriba: repite el destino del título, así que va fuera
+                    del árbol de accesibilidad y del tabulador. Es la señal de
+                    que hay algo que ver, no una tercera puerta. */}
+                {PROJECT_DEMOS[project.id] && (
+                  <a
+                    class="entry-thumb"
+                    href={href}
+                    data-detail-open={dialogId}
+                    tabindex="-1"
+                    aria-hidden="true"
+                  >
+                    <ProjectThumb
+                      projectId={project.id}
+                      sizes="(width < 720px) 100vw, 208px"
+                    />
+                  </a>
+                )}
+              </article>
+            </li>
+          )
+        })
+      }
+    </ul>
+  </main>
+
+  {
+    /* La hoja de los diálogos no viaja con esta página: la trae el guion junto
+      con la ficha, al abrir el primero. Ver `ProjectDialogRuntime.astro`. */
+  }
+  <ProjectDialogRuntime />
+</Layout>
+
+<style>
+  .projects-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+    inline-size: min(100% - 2rem, 52rem);
+    margin-inline: auto;
+    padding-block: 1.4rem 3rem;
+  }
+
+  .projects-head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .back-link {
+    align-self: flex-start;
+  }
+
+  .projects-head h1 {
+    font-size: clamp(1.7rem, 1.2rem + 2vw, 2.4rem);
+    font-weight: 800;
+    line-height: 1.15;
+  }
+
+  .lead {
+    color: var(--text-muted);
+    max-inline-size: 42ch;
+  }
+
+  .projects-index {
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+  }
+
+  /* Misma anatomía que las secciones de la política: un ordinal de instrumento
+     a la izquierda y el contenido a la derecha. */
+  .projects-index article {
+    display: grid;
+    gap: 0.35rem 1rem;
+    grid-template-columns: 2.6rem minmax(0, 1fr);
+  }
+
+  .ordinal {
+    color: var(--text-faint);
+    font-family: var(--font-display);
+    padding-block-start: 0.2rem;
+  }
+
+  .entry {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    min-inline-size: 0;
+  }
+
+  .entry-heading {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .entry-heading h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  .entry-heading a {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .entry-heading a:hover {
+    color: var(--accent-strong);
+  }
+
+  .entry-description {
+    color: var(--text-muted);
+    max-inline-size: 60ch;
+  }
+
+  /* El segundo enlace repite el destino del título, así que se esconde del
+     árbol de accesibilidad y del tabulador: para quien navega con teclado o
+     lector ya hay una puerta, y dos seguidas al mismo sitio sólo estorban.
+     Visualmente sí importa — es la señal de que la ficha continúa. */
+  .entry-cta {
+    align-items: center;
+    align-self: flex-start;
+    color: var(--accent-strong);
+    display: inline-flex;
+    font-size: 0.82rem;
+    gap: 0.3rem;
+    text-decoration: none;
+  }
+
+  .entry-cta__icon {
+    display: inline-flex;
+    inline-size: 0.9rem;
+  }
+
+  .entry-cta:hover {
+    text-decoration: underline;
+  }
+
+  /* La captura a la derecha en ancho, y debajo del texto en estrecho, bajo la
+     columna del contenido. Sin `order`: con una columna fija, reordenar
+     empujaría el texto a la del ordinal. */
+  .entry-thumb {
+    display: block;
+    grid-column: 2;
+  }
+
+  @media (width >= 720px) {
+    .projects-index article {
+      grid-template-columns: 2.6rem minmax(0, 1fr) 13rem;
+    }
+
+    .entry-thumb {
+      grid-column: 3;
+      grid-row: 1;
+    }
+  }
+
+  @media (width < 560px) {
+    .projects-index article {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ordinal {
+      display: none;
+    }
+
+    .entry-thumb {
+      grid-column: 1;
+    }
+  }
+</style>

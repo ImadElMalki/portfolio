@@ -1,0 +1,85 @@
+---
+/**
+ * Yaz (ⵣ), la letra tifinagh que la bandera amazigh lleva en el centro.
+ *
+ * Va como SVG y **no** como texto, y no es una preferencia de estilo: el sitio
+ * sirve las tres fuentes con el subconjunto `latin` y la CSP declara
+ * `font-src 'self'`, así que U+2D63 no tiene glifo en ninguna de ellas. Escrito
+ * como carácter saldría como caja vacía en cualquier equipo sin una fuente
+ * tifinagh instalada.
+ *
+ * Dibujado con puntos y no con trazo, sobre una retícula de 7 × 11 al paso de
+ * 4 px: el mismo que `.section-rule`, el filete del pie y la pista de
+ * `DateRange`. Así el símbolo entra en la voz tipográfica del sitio —Doto y las
+ * rejillas de puntos— en vez de leerse como un logotipo pegado encima.
+ *
+ * ## Las proporciones son las del símbolo, no las que quepan
+ *
+ * El yaz de la bandera amazigh es una figura humana: astil central, brazos que
+ * salen en horizontal y **suben** en las puntas, piernas que salen en horizontal
+ * y **bajan**. Es simétrico al girarlo 180°.
+ *
+ * Las tres partes miden lo mismo: gancho de tres puntos, astil de tres, gancho
+ * de tres. La primera versión daba cinco puntos al astil y sólo dos a cada
+ * gancho, y con las puntas tan cortas los brazos no se leían como brazos sino
+ * como un trazo doblado. Es el error que hay que no repetir si algún día se
+ * reajusta la caja: lo que no puede encogerse es el gancho.
+ *
+ * ## Por qué un solo `<path>` y no veinticinco `<circle>`
+ *
+ * Los veintinueve puntos son **un** trazo, no veintinueve figuras: cada uno es
+ * un subtrazado de longitud cero (`M x y h0`) y `stroke-linecap="round"` lo
+ * pinta como un círculo. `stroke-width` es el diámetro.
+ *
+ * La versión anterior dibujaba filas y columnas enteras con
+ * `stroke-dasharray="0 4"`, que es más corto de escribir y **está mal**: el
+ * punto que cae justo en el final de un tramo no se pinta de forma fiable. Los
+ * ganchos de tres puntos salían con dos y el astil también, así que los brazos
+ * quedaban descuadrados respecto a las puntas —se veía torcido, y lo estaba—.
+ * Con los puntos escritos uno a uno no hay nada que interpretar.
+ *
+ * El diámetro es 2,2 y no 2,7: 2,2 sobre un paso de 4 deja el mismo hueco de
+ * 1,8 que el radio de 1,1 de `.section-rule` y del filete del pie, así que los
+ * puntos del símbolo tienen exactamente la textura de los del resto del sitio.
+ * A 2,7 se rozaban y las dos barras se leían como trazo continuo.
+ *
+ * La primera versión sí usaba un `<circle>` por punto y `scripts/check-build.mjs`
+ * la rechazó: el símbolo sale tres veces por página —nombre, pie y consola— y
+ * ochenta y un elementos de más pasaban el presupuesto de DOM. Así son tres.
+ *
+ * Sin `label` es decoración y se anuncia como tal. Con `label` pasa a ser
+ * contenido: es el caso del pie, donde el símbolo *es* la firma y no acompaña a
+ * ningún texto que ya lo diga.
+ *
+ * `width` y `height` en el marcado, como el resto de `src/icons`: sin ellos el
+ * SVG no tiene tamaño intrínseco, y los tres sitios que lo usan fijan el alto y
+ * dejan el ancho en `auto`. Sin proporción de la que tirar, ese `auto` se
+ * resolvía al ancho del contenedor: el yaz del nombre salía de 289 px de ancho
+ * y empujaba el apellido 400 px hacia abajo.
+ */
+interface Props {
+  label?: string
+  class?: string
+}
+
+const { label, class: className } = Astro.props
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 28 44"
+  width="28"
+  height="44"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2.2"
+  stroke-linecap="round"
+  class={className}
+  role={label ? "img" : undefined}
+  aria-label={label}
+  aria-hidden={label ? undefined : "true"}
+>
+  <path
+    d="M2 2h0M26 2h0M2 6h0M26 6h0M2 10h0M26 10h0M2 14h0M6 14h0M10 14h0M14 14h0M18 14h0M22 14h0M26 14h0M14 18h0M14 22h0M14 26h0M2 30h0M6 30h0M10 30h0M14 30h0M18 30h0M22 30h0M26 30h0M2 34h0M26 34h0M2 38h0M26 38h0M2 42h0M26 42h0"
+  ></path>
+</svg>

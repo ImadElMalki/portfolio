@@ -1,0 +1,101 @@
+---
+/**
+ * Script inline en <head> para aplicar el tema antes del primer paint (evita FOUC).
+ * Astro no incluye un toggle nativo; este patrón es el recomendado en la doc.
+ *
+ * - El tema sigue funcionando aunque el navegador bloquee `localStorage`.
+ * - `themeColors` debe coincidir con `--bg` en `Layout.astro`.
+ * - Las etiquetas `theme-color` del layout dependen de
+ *   `prefers-color-scheme`, así que ignoran el tema que elige la persona. Se
+ *   antepone una sin `media` (el navegador se queda con la primera que casa) y
+ *   se actualiza en `applyThemeColor`.
+ *
+ * Los comentarios van aquí y no dentro del guion: un `is:inline` no se
+ * minifica y viaja entero a cada página.
+ */
+interface Props {
+  /** Tema por defecto si no hay preferencia guardada ni del sistema */
+  defaultTheme?: "light" | "dark" | "auto"
+}
+
+const { defaultTheme = "auto" } = Astro.props
+---
+
+<script is:inline data-default-theme={defaultTheme}>
+  window.theme ??= (() => {
+    const defaultTheme =
+      document.currentScript?.getAttribute("data-default-theme") || "auto"
+    const storageKey = "theme"
+
+    function readStoredTheme() {
+      try {
+        return window.localStorage.getItem(storageKey)
+      } catch {
+        return null
+      }
+    }
+
+    function storeTheme(theme) {
+      try {
+        window.localStorage.setItem(storageKey, theme)
+      } catch {}
+    }
+
+    const mediaMatcher = window.matchMedia("(prefers-color-scheme: dark)")
+    let systemTheme = mediaMatcher.matches ? "dark" : "light"
+
+    const themeColors = { light: "#f7f8f6", dark: "#0d100e" }
+
+    function applyThemeColor(resolved) {
+      let meta = document.querySelector("meta[data-theme-color]")
+
+      if (!meta) {
+        meta = document.createElement("meta")
+        meta.setAttribute("name", "theme-color")
+        meta.setAttribute("data-theme-color", "")
+        document.head.prepend(meta)
+      }
+
+      meta.setAttribute("content", themeColors[resolved])
+    }
+
+    function applyTheme(theme) {
+      const resolved = theme === "auto" ? systemTheme : theme
+      document.documentElement.dataset.theme = resolved
+      applyThemeColor(resolved)
+      document.dispatchEvent(
+        new CustomEvent("theme-changed", {
+          detail: { theme, systemTheme, resolved },
+        }),
+      )
+    }
+
+    function setTheme(theme = defaultTheme) {
+      storeTheme(theme)
+      applyTheme(theme)
+    }
+
+    function getTheme() {
+      return readStoredTheme() || defaultTheme
+    }
+
+    function getSystemTheme() {
+      return systemTheme
+    }
+
+    const handleSystemThemeChange = (e) => {
+      systemTheme = e.matches ? "dark" : "light"
+      applyTheme(getTheme())
+    }
+
+    if (typeof mediaMatcher.addEventListener === "function") {
+      mediaMatcher.addEventListener("change", handleSystemThemeChange)
+    } else {
+      const addLegacyListener = Reflect.get(mediaMatcher, "addListener")
+      addLegacyListener.call(mediaMatcher, handleSystemThemeChange)
+    }
+
+    setTheme(getTheme())
+    return { setTheme, getTheme, getSystemTheme }
+  })()
+</script>

@@ -1,0 +1,121 @@
+---
+import Section from "../Section.astro"
+import DateRange from "../DateRange.astro"
+import type { CvData, Locale } from "@/cv"
+import { localized, t } from "@/lib/i18n"
+import { sectionId, sectionTitle } from "@/lib/sections"
+
+interface Props {
+  locale: Locale
+  cv: Readonly<CvData>
+}
+
+const { locale, cv } = Astro.props
+const { education } = cv
+---
+
+<Section
+  id={sectionId("education")}
+  title={sectionTitle("education", locale)}
+  density="compact"
+>
+  <ul class="education-list">
+    {
+      education.map(({ institution, startDate, endDate, area, studyType }) => {
+        return (
+          <li class="education-item">
+            <article>
+              <header>
+                <h3>{institution}</h3>
+
+                <DateRange
+                  locale={locale}
+                  startDate={startDate}
+                  endDate={endDate}
+                />
+              </header>
+
+              <p>
+                {localized(studyType, locale)}{" "}
+                {t(locale, "markdownEducationJoin")} {localized(area, locale)}
+              </p>
+            </article>
+          </li>
+        )
+      })
+    }
+  </ul>
+</Section>
+
+{
+  /* Sin animación de entrada por estudio: ver el porqué en Experience.astro
+     —la sección ya se revela entera con `animation-timeline: view()` y una
+     segunda entrada dentro fundía el contenido dos veces—. */
+}
+
+<style>
+  .education-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /**
+   * Sin punto de acento ni línea vertical: eran los de `Experience.astro`
+   * copiados, y con una sola entrada la línea nunca llegaba a dibujarse —queda
+   * un punto suelto imitando una cronología que no existe—. Un ciclo formativo
+   * es un dato, no una trayectoria.
+   */
+  /* Un dedo más de aire por fila que antes —eran 0,75 rem—: esta sección y la de
+     certificaciones son dos listas de filas con filete seguidas, y con el ritmo
+     apretado el ojo no encontraba dónde acababa una y empezaba la otra. */
+  .education-item {
+    padding: 0 0 1rem;
+  }
+
+  .education-item:last-child {
+    padding-bottom: 0;
+  }
+
+  .education-item:not(:last-child) {
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1rem;
+  }
+
+  article h3 {
+    color: var(--text);
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 0.45rem;
+  }
+
+  article p {
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  /* El chip de años vive en `DateRange.astro`, con su hover y su versión
+     impresa. */
+
+  @media (width <= 700px) {
+    header {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+  }
+
+  @media print {
+    .education-item {
+      padding-bottom: 0.5rem;
+    }
+  }
+</style>

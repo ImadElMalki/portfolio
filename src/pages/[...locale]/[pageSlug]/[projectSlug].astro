@@ -1,0 +1,22 @@
+---
+import ProjectPage from "@/components/projects/ProjectPage.astro"
+import { getCv } from "@/cv"
+import { projectPageStaticPaths } from "@/lib/publicPages"
+
+/**
+ * `/proyectos/<id>/`, y sus dos hermanas con prefijo.
+ *
+ * Convive con `[pageSlug].astro` sin ambigüedad porque el build es estático:
+ * `getStaticPaths` es quien decide qué existe, y esta ruta declara dos tramos
+ * donde aquélla declara uno. Los `id` salen de `cv.json`, así que añadir un
+ * proyecto publica su página sin tocar este archivo.
+ */
+export const getStaticPaths = async () => {
+  const cv = await getCv()
+  return projectPageStaticPaths(cv.projects.map(({ id }) => id))
+}
+
+const { locale, projectId } = Astro.props
+---
+
+<ProjectPage locale={locale} projectId={projectId} />

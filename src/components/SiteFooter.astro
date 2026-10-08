@@ -1,0 +1,362 @@
+---
+/**
+ * Pie del sitio: propiedad y autoría, en voz baja.
+ *
+ * Va montado en `Layout` tras el `<slot />`, así que cubre la portada, la
+ * landing de servicios y las tres 404 de una vez.
+ *
+ * Está escrito como una fila de metadatos y no como una frase centrada: es la
+ * última línea de la página y lo que le toca decir —paleta, año, formatos,
+ * quién lo firma— son datos, no una oración. Misma voz que el índice de las
+ * secciones o la fluidez de los idiomas: mono, versalitas, el tono más apagado
+ * de la escala.
+ */
+import type { Locale } from "@/cv"
+import { t } from "@/lib/i18n"
+import { localized, localizedPath } from "@/lib/i18n"
+import { PRIVACY_COPY } from "@/data/privacy"
+import { publicPagePath } from "@/lib/publicPages"
+import Yaz from "@/icons/Yaz.astro"
+
+interface Props {
+  locale: Locale
+  name: string
+}
+
+const { locale, name } = Astro.props
+
+/**
+ * El sello del build, fijado al generar el sitio.
+ *
+ * `YYYY.MM` y no el año suelto que había antes: en un pie que se lee como una
+ * franja de estado, «2026» es un dato de copyright y «BUILD 2026.08» dice
+ * cuándo se compiló esto, que es lo que dice un aparato de sí mismo. El sitio
+ * es estático y se regenera en cada despliegue, así que no hay ningún caso en
+ * que la página viva más que su sello.
+ *
+ * Se calcula aquí y no con `vite.define`: el proyecto no tiene bloque `vite` en
+ * `astro.config.mjs` y estrenarlo para un sello sería abrir una superficie de
+ * configuración entera a cambio de una línea.
+ *
+ * Su `data-build-stamp` lo usa `visual.spec.ts` para enmascararlo: al cambiar
+ * de mes, las referencias de página completa caducaban todas el día 1.
+ */
+const buildStamp = `${new Date().getFullYear()}.${String(new Date().getMonth() + 1).padStart(2, "0")}`
+---
+
+{
+  /**
+   * La mitad izquierda es la franja de estado del aparato.
+   *
+   * Cuatro lecturas rotuladas —cuánto lleva encendido, con qué paleta, en qué
+   * idioma, de cuándo es— en lugar de los tres datos sueltos que había. Los
+   * rótulos son lo que convierte «ES» en una lectura y no en una sigla suelta,
+   * que es la diferencia entre un pie y un panel.
+   *
+   * La firma —©, yaz, nineProject— se queda intacta a la derecha: es de quien
+   * lo escribe, no de la máquina.
+   */
+}
+<footer class="site-footer no-print">
+  <p class="footer-row">
+    <span class="footer-group footer-readout">
+      {
+        /* El único dato vivo del pie. Lo escribe `UtilityBarRuntime` con el
+           mismo intervalo de un segundo que ya mueve el reloj de la barra, y
+           cuenta desde que se abrió la pestaña: el encendido se guarda en
+           `sessionStorage`, así que sobrevive a las navegaciones. Sale vacío y
+           el `:empty` del CSS lo esconde hasta que hay algo que decir. */
+      }
+      <span class="footer-uptime" data-footer-uptime aria-hidden="true"></span>
+      {
+        /**
+         * La paleta sorteada en esta carga.
+         *
+         * Va vacío: `data-accent` selecciona en CSS el valor de
+         * `--accent-name` (ver `Layout.astro`), y el rótulo entra en el mismo
+         * `content`. El servidor no puede saberlo —se decide en el navegador— y
+         * escribir la variable con CSSOM daba un error de CSP en cada
+         * navegación.
+         *
+         * `aria-hidden`: a quien escucha la página, «OCEAN» no le dice nada.
+         */
+      }
+      <span class="footer-accent" aria-hidden="true"></span>
+      <span class="footer-code" data-build-stamp>BUILD {buildStamp}</span>
+      {
+        /* Los dos formatos para máquinas, con la voz de las lecturas. Los
+           enlazaba la vista Markdown hasta el 06-10-2026; los ATS y los
+           agentes los encuentran también por el `<link rel="alternate">` de la
+           cabecera.
+
+           Ocupan el sitio de «LOCALE ES», que repetía el conmutador de idioma:
+           con las dos lecturas a la vez el pie no cabía en una línea a 920 px,
+           y el acento sorteado puede llevar un nombre más largo que «CYAN».
+
+           El enlace va dentro del `span` para que el punto separador no herede
+           el subrayado. */
+      }
+      <span class="footer-code">
+        <a
+          class="footer-format"
+          href={localizedPath(locale, "/cv.md")}
+          type="text/markdown"
+          title={t(locale, "markdownAlternate")}>cv.md</a
+        >
+      </span>
+      <span class="footer-code">
+        <a
+          class="footer-format"
+          href={localizedPath(locale, "/cv.json")}
+          type="application/json"
+          title={t(locale, "jsonAlternate")}>cv.json</a
+        >
+      </span>
+    </span>
+    <span class="footer-group">
+      <span>© {name}</span>
+      <a class="footer-privacy" href={publicPagePath("privacy", locale)}>
+        {localized(PRIVACY_COPY.navLabel, locale)}
+      </a>
+      {
+        /* El yaz cierra la firma. Es el único glifo del pie que no es un dato
+           del documento sino de quien lo firma, así que va pegado al © y no en
+           el grupo de la izquierda, que es el de la máquina. Lleva etiqueta
+           —aquí no hay texto alrededor que lo explique— al contrario que el del
+           hero, que acompaña al nombre escrito. */
+      }
+      <Yaz class="footer-yaz" label={t(locale, "amazigh")} />
+      {
+        /* `rel="me"`: nineproject es el estudio de quien firma, no un
+           proveedor. En minúsculas, que es como se escribe la marca; en
+           pantalla las versalitas del pie lo igualan. */
+      }
+      <span class="footer-by">
+        {t(locale, "footerBuiltBy")}{" "}
+        <a class="footer-studio" href="https://nineproject.es/" rel="me"
+          >nineproject</a
+        >
+      </span>
+    </span>
+  </p>
+</footer>
+
+<style>
+  /* Disimulado: la misma tipografía monoespaciada que el resto de los datos
+     anotados del sitio, al tono más apagado de la escala y con aire de sobra por
+     arriba para que no se lea como parte del contenido. */
+  /**
+   * El ancho es el de las vistas, no el de `--page-width` a secas.
+   *
+   * Era `min(100%, var(--page-width))`, y con ello el relleno de 48 px se comía
+   * los 920 desde dentro: la caja de contenido quedaba en 824 y la línea de
+   * puntos empezaba y acababa 48 px por dentro del bloque de arriba. Todos los
+   * contenedores de vista hacen lo contrario —le suman el relleno a la caja—, y
+   * por eso todos dan exactamente 920 de contenido:
+   *
+   *   #web-view, landings                920 + 6rem − 2×48 = 920
+   *   .utility-bar__content              920, con el relleno en el padre
+   *
+   * Con `+ 6rem` el pie entra en esa cuenta y la raya llega hasta donde llega el
+   * contenido. `+ 6rem` y no `1016px` a pelo: por debajo de 920 px de ventana
+   * los dos términos colapsan a `100%` y el comportamiento en estrecho —donde ya
+   * coincidía al píxel— se conserva igual.
+   */
+  .site-footer {
+    margin-inline: auto;
+    padding: 2.5rem clamp(1.25rem, 5vw, 3rem) 1.5rem;
+    width: min(100%, calc(var(--page-width) + 6rem));
+  }
+
+  /**
+   * Una regla de puntos cierra la página antes del pie, como la que abre cada
+   * sección. Es el mismo motivo, en el otro extremo del recorrido.
+   */
+  .site-footer::before {
+    --dot-ink: var(--border-hover);
+    background-image: var(--dot-fine);
+    background-size: var(--dot-fine-size);
+    block-size: 3px;
+    content: "";
+    display: block;
+    margin-block-end: 1.25rem;
+  }
+
+  /**
+   * Los datos de máquina a un lado y la firma al otro. Al estrecharse, las dos
+   * mitades se apilan alineadas a la izquierda en vez de centrarse: una fila de
+   * metadatos centrada deja de leerse como una fila de metadatos.
+   *
+   * `flex-wrap: wrap` se queda, y es la red y no un descuido: los dos grupos
+   * suman unos 840 px, así que por debajo de ~950 de ventana no caben en un
+   * renglón por mucho que se apriete. Forzar `nowrap` no los haría caber, los
+   * sacaría por el canto —y hay dos pruebas midiendo desbordamiento a 375, 768,
+   * 1280 y 1920 que lo cazarían—.
+   */
+  .footer-row {
+    color: var(--text-faint);
+    display: flex;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    /* Los huecos se aprietan un poco —iban a 1,25 rem— para que las dos mitades
+       quepan en un renglón en más anchos. Sale de aquí y no del texto: el
+       espaciado es donde había grasa. */
+    gap: 0.35rem 1rem;
+    justify-content: space-between;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .footer-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.6rem;
+  }
+
+  .footer-code {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .footer-format {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  /**
+   * La franja de estado, separada por puntos.
+   *
+   * Los separadores van nombrados uno a uno y no con un `:not(:empty) ~ *`
+   * genérico, que era lo natural y aquí no vale: `.footer-accent` es un span
+   * **vacío** cuyo texto lo pinta `::after` desde el CSS de la paleta, así que
+   * para el selector `:empty` es cierto y la regla se lo saltaría entero.
+   *
+   * `column-gap: 0` porque el aire lo pone ahora el margen del propio
+   * separador; el `row-gap` de `.footer-group` se queda para cuando la fila
+   * envuelve.
+   */
+  .footer-readout {
+    column-gap: 0;
+  }
+
+  /* Con margen y no con espacios dentro del `content`: cada lectura es un
+     elemento flexible, y el navegador recorta el blanco del principio de su
+     línea. Es la misma cuenta que hace el separador del reloj de la barra. */
+  .footer-accent::before,
+  .footer-readout .footer-code::before {
+    color: var(--text-faint);
+    content: "·";
+    margin-inline: 0.35em;
+  }
+
+  /* Sin JS el tiempo de encendido no llega a escribirse nunca, y entonces la
+     fila empezaría por un punto suelto. */
+  .footer-uptime:empty + .footer-accent::before {
+    content: none;
+  }
+
+  /* Cifras tabulares: son seis dígitos que cambian cada segundo, y sin esto el
+     pie entero se movería sesenta veces por minuto. */
+  .footer-uptime:not(:empty) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /**
+   * El único trazo de color del pie, y va donde toca: en el nombre de la paleta
+   * que se está viendo.
+   *
+   * `--accent-name` se define dentro del mismo bloque que los colores de cada
+   * paleta. Así el rótulo sobrevive a la navegación sin escribir un estilo en
+   * línea, que la CSP bloquearía. El respaldo vacío deja el hueco en blanco si
+   * algo falla, nunca la palabra «undefined».
+   */
+  .footer-accent {
+    color: var(--accent);
+  }
+
+  /* El rótulo entra en el mismo `content` que el nombre: son un solo dato, y
+     partirlo en dos nodos para poder teñir sólo la mitad no compensa un
+     elemento más en las doce páginas. */
+  .footer-accent::after {
+    content: "ACCENT " var(--accent-name, "");
+  }
+
+  /* Alto de una versalita de la fila para que se lea como un carácter más de
+     los metadatos y no como un icono metido entre ellos. El ancho lo pone el
+     `viewBox`. */
+  :global(.footer-yaz) {
+    align-self: center;
+    block-size: 0.72rem;
+    color: var(--text-faint);
+    inline-size: auto;
+  }
+
+  /* La autoría cede primero: es lo único de la fila que no es un dato del
+     documento. */
+  .footer-by {
+    color: var(--text-faint);
+  }
+
+  /* El enlace no se distingue sólo por el color: el pie va al tono más
+     apagado de la escala y un enlace sin subrayado ahí sería invisible. */
+  .footer-studio {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .footer-privacy {
+    color: var(--text-muted);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  /**
+   * En estrecho, dos filas queridas en vez de dos filas por desbordar.
+   *
+   * `space-between` con `flex-wrap` dejaba que las dos mitades se partieran por
+   * donde cayera: la franja de estado rompía entre «LOCALE» y «ES», y la firma
+   * se repartía en tres renglones desiguales con los puntos separadores
+   * abriendo línea. `column` las apila a propósito —máquina arriba, firma
+   * abajo— y el `nowrap` de cada dato impide que una lectura se parta por
+   * dentro: si la fila no cabe, rompe entre lecturas.
+   *
+   * Y el pie arranca antes: 1,75rem por arriba en vez de 2,5. El resto del
+   * hueco que había se recortó en el `padding-bottom` de `#web-view`.
+   */
+  @media (width <= 700px) {
+    .site-footer {
+      padding-block-start: 1.75rem;
+    }
+
+    .footer-row {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.5rem;
+      justify-content: flex-start;
+    }
+
+    .footer-group > * {
+      white-space: nowrap;
+    }
+
+    /**
+     * Y sin los puntos separadores.
+     *
+     * Son `::before` de cada lectura, así que al partirse la fila el punto se
+     * iba con el dato de abajo y la línea siguiente **empezaba** por «· BUILD
+     * 2026.08». Un separador que abre línea no separa nada: parece una viñeta.
+     * En estrecho el hueco basta para separar, y el punto vuelve en cuanto la
+     * fila cabe entera.
+     */
+    .footer-accent::before,
+    .footer-readout .footer-code::before {
+      content: none;
+    }
+
+    .footer-readout {
+      column-gap: 0.75rem;
+    }
+  }
+</style>

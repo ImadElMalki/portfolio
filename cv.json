@@ -1,0 +1,1133 @@
+{
+  "basics": {
+    "name": "Imad El Malki Jaddi",
+    "label": {
+      "es": "Desarrollador de software · Angular & Java",
+      "ca": "Desenvolupador de programari · Angular & Java",
+      "en": "Software developer · Angular & Java"
+    },
+    "image": "/portrait.webp",
+    "email": "imadelmalkij@gmail.com",
+    "phone": "+34641829721",
+    "headline": {
+      "es": "Imad El Malki · Desarrollador de software Angular y Java",
+      "ca": "Imad El Malki · Desenvolupador de programari Angular i Java",
+      "en": "Imad El Malki · Angular and Java software developer"
+    },
+    "tagline": {
+      "es": "Desarrollo aplicaciones con Angular y Java en el trabajo, y construyo proyectos propios para web, Android y cloud.",
+      "ca": "Desenvolupo aplicacions amb Angular i Java a la feina, i construeixo projectes propis per a web, Android i cloud.",
+      "en": "I build applications with Angular and Java at work, and my own projects for the web, Android and the cloud."
+    },
+    "summary": {
+      "es": "Soy desarrollador de software especializado en Angular y Java. Desde 2023 trabajo en VIEWNEXT, desarrollando aplicaciones web junto a equipos de Java y QA. Fuera del trabajo construyo proyectos propios de principio a fin, con su base de datos, su despliegue y sus decisiones de producto; varios están publicados y en uso.",
+      "ca": "Soc desenvolupador de programari especialitzat en Angular i Java. Des del 2023 treballo a VIEWNEXT, desenvolupant aplicacions web amb equips de Java i QA. Fora de la feina construeixo projectes propis de cap a fi, amb la seva base de dades, el seu desplegament i les seves decisions de producte; uns quants estan publicats i en ús.",
+      "en": "I am a software developer specialising in Angular and Java. Since 2023 I have been at VIEWNEXT, building web applications alongside Java and QA teams. Outside work I build my own projects end to end, database, deployment and product decisions included; several of them are published and in use."
+    },
+    "location": {
+      "city": "La Gornal",
+      "region": {
+        "es": "Barcelona",
+        "ca": "Barcelona",
+        "en": "Barcelona"
+      },
+      "countryCode": "ES"
+    },
+    "profiles": [
+      {
+        "network": "LinkedIn",
+        "username": "imad-el-malki-jaddi-a0585a284",
+        "url": "https://www.linkedin.com/in/imad-el-malki-jaddi-a0585a284/"
+      },
+      {
+        "network": "GitHub",
+        "username": "ImadElMalki",
+        "url": "https://github.com/ImadElMalki"
+      }
+    ],
+    "summaryPrint": {
+      "es": "Desarrollador de software especializado en Angular y Java, con experiencia en aplicaciones para el sector público y en el desarrollo de productos propios de principio a fin.",
+      "ca": "Desenvolupador de programari especialitzat en Angular i Java, amb experiència en aplicacions per al sector públic i en el desenvolupament de productes propis de principi a fi.",
+      "en": "Software developer specialising in Angular and Java, with experience in public-sector applications and in building his own products end to end."
+    }
+  },
+  "work": [
+    {
+      "name": "VIEWNEXT",
+      "description": {
+        "es": "Subsidiaria de IBM",
+        "ca": "Subsidiària d'IBM",
+        "en": "An IBM subsidiary"
+      },
+      "position": {
+        "es": "Angular Developer",
+        "ca": "Angular Developer",
+        "en": "Angular Developer"
+      },
+      "url": "https://www.viewnext.com/",
+      "startDate": "2023-07-04",
+      "endDate": null,
+      "summary": {
+        "es": "Desarrollo aplicaciones Angular para el sector público con APIs y backends Java/Spring Boot.",
+        "ca": "Desenvolupo aplicacions Angular per al sector públic amb APIs i backends Java/Spring Boot.",
+        "en": "I build Angular applications for the public sector with APIs and Java/Spring Boot backends."
+      },
+      "highlights": {
+        "es": [
+          "Contribuyo a CIRNM, un sistema municipal relacionado con la gestión ambiental.",
+          "Desarrollo y mejoro SIVCA, integrado con MiNT para gestionar, validar y monitorizar los datos de calidad del aire de Madrid.",
+          "Implemento componentes, pantallas y nuevas funciones, mantengo la aplicación e integro APIs con los equipos Java y QA."
+        ],
+        "ca": [
+          "Contribueixo a CIRNM, un sistema municipal relacionat amb la gestió ambiental.",
+          "Desenvolupo i milloro SIVCA, integrat amb MiNT per gestionar, validar i monitorar les dades de qualitat de l'aire de Madrid.",
+          "Implemento components, pantalles i noves funcions, mantinc l'aplicació i integro APIs amb els equips Java i QA."
+        ],
+        "en": [
+          "I contribute to CIRNM, a municipal system related to environmental management.",
+          "I build and improve SIVCA, integrated with MiNT to manage, validate and monitor Madrid's air-quality data.",
+          "I implement components, screens and new features, maintain the application and integrate APIs with Java and QA teams."
+        ]
+      },
+      "summaryPrint": {
+        "es": "Desarrollo de aplicaciones Angular para el sector público, con integración de APIs y backends en Java y Spring Boot.",
+        "ca": "Desenvolupament d'aplicacions Angular per al sector públic, amb integració d'APIs i backends en Java i Spring Boot.",
+        "en": "Development of Angular applications for the public sector, with integration of APIs and Java and Spring Boot backends."
+      },
+      "highlightsPrint": {
+        "es": [
+          "Contribución a CIRNM, sistema municipal de gestión ambiental.",
+          "Desarrollo y mejora de SIVCA, integrado con MiNT para la gestión, validación y monitorización de los datos de calidad del aire de Madrid.",
+          "Implementación de componentes, pantallas y nuevas funcionalidades; mantenimiento de la aplicación e integración de APIs con los equipos de Java y QA."
+        ],
+        "ca": [
+          "Contribució a CIRNM, sistema municipal de gestió ambiental.",
+          "Desenvolupament i millora de SIVCA, integrat amb MiNT per a la gestió, validació i monitoratge de les dades de qualitat de l'aire de Madrid.",
+          "Implementació de components, pantalles i noves funcionalitats; manteniment de l'aplicació i integració d'APIs amb els equips de Java i QA."
+        ],
+        "en": [
+          "Contribution to CIRNM, a municipal environmental management system.",
+          "Development and improvement of SIVCA, integrated with MiNT for the management, validation and monitoring of Madrid's air-quality data.",
+          "Implementation of components, screens and new features; application maintenance and API integration with the Java and QA teams."
+        ]
+      }
+    },
+    {
+      "name": "INETUM",
+      "position": {
+        "es": "Desarrollador web",
+        "ca": "Desenvolupador web",
+        "en": "Web developer"
+      },
+      "url": "https://www.inetum.com/es/es.html",
+      "startDate": "2022-05-02",
+      "endDate": "2022-09-21",
+      "summary": {
+        "es": "Desarrollo de aplicaciones internas y web en Inetum Catalunya, con herramientas low-code y tecnologías web.",
+        "ca": "Desenvolupament d'aplicacions internes i web a Inetum Catalunya, amb eines low-code i tecnologies web.",
+        "en": "Development of internal and web applications at Inetum Catalunya, with low-code tools and web technologies."
+      },
+      "highlights": {
+        "es": [
+          "Desarrollé aplicaciones empresariales con Microsoft Power Apps.",
+          "Creé cuadros de mando e informes con Microsoft Power BI."
+        ],
+        "ca": [
+          "Vaig desenvolupar aplicacions empresarials amb Microsoft Power Apps.",
+          "Vaig crear quadres de comandament i informes amb Microsoft Power BI."
+        ],
+        "en": [
+          "I built enterprise applications with Microsoft Power Apps.",
+          "I created dashboards and reports with Microsoft Power BI."
+        ]
+      },
+      "highlightsPrint": {
+        "es": [
+          "Desarrollo de aplicaciones empresariales con Microsoft Power Apps.",
+          "Creación de cuadros de mando e informes con Microsoft Power BI."
+        ],
+        "ca": [
+          "Desenvolupament d'aplicacions empresarials amb Microsoft Power Apps.",
+          "Creació de quadres de comandament i informes amb Microsoft Power BI."
+        ],
+        "en": [
+          "Development of enterprise applications with Microsoft Power Apps.",
+          "Creation of dashboards and reports with Microsoft Power BI."
+        ]
+      }
+    }
+  ],
+  "otherWork": [
+    {
+      "name": "No publicado 1",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    },
+    {
+      "name": "No publicado 2",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    },
+    {
+      "name": "No publicado 3",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    },
+    {
+      "name": "No publicado 4",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    },
+    {
+      "name": "No publicado 5",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    },
+    {
+      "name": "No publicado 6",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    },
+    {
+      "name": "No publicado 7",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    },
+    {
+      "name": "No publicado 8",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    },
+    {
+      "name": "No publicado 9",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    },
+    {
+      "name": "No publicado 10",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    },
+    {
+      "name": "No publicado 11",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    },
+    {
+      "name": "No publicado 12",
+      "position": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "field": {
+        "es": "No publicado",
+        "ca": "No publicado",
+        "en": "No publicado"
+      },
+      "startDate": "2020-01-01",
+      "endDate": "2020-12-31"
+    }
+  ],
+  "otherSkills": {
+    "es": ["No publicado"],
+    "ca": ["No publicado"],
+    "en": ["No publicado"]
+  },
+  "education": [
+    {
+      "id": "daw",
+      "institution": "Institut Camí de Mar",
+      "area": {
+        "es": "Desarrollo de Aplicaciones Web (DAW)",
+        "ca": "Desenvolupament d'Aplicacions Web (DAW)",
+        "en": "Web Application Development (DAW)"
+      },
+      "studyType": {
+        "es": "Ciclo Formativo de Grado Superior",
+        "ca": "Cicle Formatiu de Grau Superior",
+        "en": "Advanced Vocational Training Diploma"
+      },
+      "startDate": "2021-09-01",
+      "endDate": "2023-05-01"
+    },
+    {
+      "id": "bachillerato-ciencia-tecnologia",
+      "institution": "Institut de l'Arboç · Institut Manuel de Cabanyes",
+      "area": {
+        "es": "Ciencias y Tecnología",
+        "ca": "Ciències i Tecnologia",
+        "en": "Science and Technology"
+      },
+      "studyType": {
+        "es": "Bachillerato",
+        "ca": "Batxillerat",
+        "en": "Upper secondary education"
+      },
+      "startDate": "2017-09-01",
+      "endDate": "2019-06-01"
+    }
+  ],
+  "certificates": [
+    {
+      "id": "angular-devtalles",
+      "name": {
+        "es": "Angular: De cero a experto",
+        "ca": "Angular: De cero a experto",
+        "en": "Angular: De cero a experto"
+      },
+      "issuer": "DevTalles",
+      "date": "2024-11-30",
+      "hours": 34,
+      "featured": true,
+      "url": "https://cursos.devtalles.com/courses/angular"
+    },
+    {
+      "id": "astro-devtalles",
+      "name": {
+        "es": "Astro: El framework para sitios web orientados al contenido",
+        "ca": "Astro: El framework para sitios web orientados al contenido",
+        "en": "Astro: El framework para sitios web orientados al contenido"
+      },
+      "issuer": "DevTalles",
+      "date": "2025-06-30",
+      "hours": 26,
+      "featured": true,
+      "url": "https://cursos.devtalles.com/courses/Astro"
+    },
+    {
+      "id": "git-github-devtalles",
+      "name": {
+        "es": "GIT+GitHub: Todo un sistema de control de versiones de cero",
+        "ca": "GIT+GitHub: Todo un sistema de control de versiones de cero",
+        "en": "GIT+GitHub: Todo un sistema de control de versiones de cero"
+      },
+      "issuer": "DevTalles",
+      "date": "2026-08-24",
+      "hours": 12,
+      "url": "https://cursos.devtalles.com/courses/git-github-control-versiones"
+    },
+    {
+      "id": "claude-code-devtalles",
+      "name": {
+        "es": "Claude Code: Guía completa para desarrolladores de software",
+        "ca": "Claude Code: Guía completa para desarrolladores de software",
+        "en": "Claude Code: Guía completa para desarrolladores de software"
+      },
+      "issuer": "DevTalles",
+      "date": "2026-08-24",
+      "hours": 18,
+      "url": "https://cursos.devtalles.com/courses/claude-code-guia-completa"
+    },
+    {
+      "id": "mcp-midu",
+      "name": {
+        "es": "Model Context Protocol (MCP)",
+        "ca": "Model Context Protocol (MCP)",
+        "en": "Model Context Protocol (MCP)"
+      },
+      "issuer": "midu.dev",
+      "date": "2026-08-24",
+      "url": "https://midu.dev/curso/intensivo-mcp"
+    },
+    {
+      "id": "github-actions-midu",
+      "name": {
+        "es": "GitHub Actions",
+        "ca": "GitHub Actions",
+        "en": "GitHub Actions"
+      },
+      "issuer": "midu.dev",
+      "date": "2026-08-24",
+      "url": "https://midu.dev/curso/curso-de-github-actions"
+    },
+    {
+      "id": "docker-devops-midu",
+      "name": {
+        "es": "Docker y DevOps",
+        "ca": "Docker y DevOps",
+        "en": "Docker y DevOps"
+      },
+      "issuer": "midu.dev",
+      "date": "2026-08-24",
+      "url": "https://midu.dev/curso/curso-docker-devops"
+    },
+    {
+      "id": "spring-boot-starters-viewnext",
+      "name": {
+        "es": "Spring Boot Starters",
+        "ca": "Spring Boot Starters",
+        "en": "Spring Boot Starters"
+      },
+      "issuer": "Viewnext",
+      "date": "2025-02-08",
+      "hours": 12
+    },
+    {
+      "id": "jpa-viewnext",
+      "name": {
+        "es": "JPA (Java Persistence API)",
+        "ca": "JPA (Java Persistence API)",
+        "en": "JPA (Java Persistence API)"
+      },
+      "issuer": "Viewnext",
+      "date": "2025-02-08",
+      "hours": 12
+    },
+    {
+      "id": "java-8-viewnext",
+      "name": {
+        "es": "Java 8: novedades y buenas prácticas",
+        "ca": "Java 8: novetats i bones pràctiques",
+        "en": "Java 8: new features and best practices"
+      },
+      "issuer": "Viewnext",
+      "date": "2025-02-08",
+      "hours": 8
+    },
+    {
+      "id": "sql-avanzado-viewnext",
+      "name": {
+        "es": "SQL avanzado",
+        "ca": "SQL avançat",
+        "en": "Advanced SQL"
+      },
+      "issuer": "Viewnext",
+      "date": "2025-02-08",
+      "hours": 8
+    },
+    {
+      "id": "javascript-viewnext",
+      "name": {
+        "es": "JavaScript",
+        "ca": "JavaScript",
+        "en": "JavaScript"
+      },
+      "issuer": "Viewnext",
+      "date": "2025-02-08",
+      "hours": 8
+    },
+    {
+      "id": "bootstrap-responsive-viewnext",
+      "name": {
+        "es": "Diseño responsive con Bootstrap",
+        "ca": "Disseny responsive amb Bootstrap",
+        "en": "Responsive design with Bootstrap"
+      },
+      "issuer": "Viewnext",
+      "date": "2025-02-08",
+      "hours": 12
+    },
+    {
+      "id": "rendimiento-viewnext",
+      "name": {
+        "es": "Buenas prácticas de rendimiento",
+        "ca": "Bones pràctiques de rendiment",
+        "en": "Performance best practices"
+      },
+      "issuer": "Viewnext",
+      "date": "2025-02-08",
+      "hours": 8
+    },
+    {
+      "id": "seguridad-privacidad-viewnext",
+      "name": {
+        "es": "Seguridad y privacidad por diseño (técnico)",
+        "ca": "Seguretat i privacitat per disseny (tècnic)",
+        "en": "Security and privacy by design (technical)"
+      },
+      "issuer": "Viewnext",
+      "date": "2025-02-08",
+      "hours": 3
+    },
+    {
+      "id": "crypt0-ibm",
+      "name": {
+        "es": "Crypt0 · Ciberseguridad",
+        "ca": "Crypt0 · Ciberseguretat",
+        "en": "Crypt0 · Cybersecurity"
+      },
+      "issuer": "IBM",
+      "date": "2026-07-07",
+      "hours": 3,
+      "featured": true
+    },
+    {
+      "id": "ingles-b2-gofluent",
+      "name": {
+        "es": "Test de nivel de inglés · MCER B2",
+        "ca": "Test de nivell d'anglès · MECR B2",
+        "en": "English proficiency test · CEFR B2"
+      },
+      "issuer": "goFLUENT",
+      "date": "2024-09-02",
+      "featured": true
+    }
+  ],
+  "languages": [
+    {
+      "language": {
+        "es": "Español",
+        "ca": "Castellà",
+        "en": "Spanish"
+      },
+      "fluency": {
+        "es": "Nativo",
+        "ca": "Natiu",
+        "en": "Native"
+      },
+      "level": "native"
+    },
+    {
+      "language": {
+        "es": "Catalán",
+        "ca": "Català",
+        "en": "Catalan"
+      },
+      "fluency": {
+        "es": "Nativo",
+        "ca": "Natiu",
+        "en": "Native"
+      },
+      "level": "native"
+    },
+    {
+      "language": {
+        "es": "Árabe",
+        "ca": "Àrab",
+        "en": "Arabic"
+      },
+      "fluency": {
+        "es": "Nativo",
+        "ca": "Natiu",
+        "en": "Native"
+      },
+      "level": "native"
+    },
+    {
+      "language": {
+        "es": "Bereber (amazig)",
+        "ca": "Berber (amazic)",
+        "en": "Berber (Amazigh)"
+      },
+      "fluency": {
+        "es": "Nativo",
+        "ca": "Natiu",
+        "en": "Native"
+      },
+      "level": "native"
+    },
+    {
+      "language": {
+        "es": "Inglés",
+        "ca": "Anglès",
+        "en": "English"
+      },
+      "fluency": {
+        "es": "Intermedio alto",
+        "ca": "Intermedi alt",
+        "en": "Upper intermediate"
+      },
+      "level": "B2"
+    }
+  ],
+  "projects": [
+    {
+      "id": "amazon-spending-tracker",
+      "name": {
+        "es": "Amazon Spending Tracker",
+        "ca": "Amazon Spending Tracker",
+        "en": "Amazon Spending Tracker"
+      },
+      "status": "published",
+      "technologies": ["JavaScript", "Chrome Extensions", "Gmail API", "OAuth"],
+      "description": {
+        "es": "Reconstruye tus compras desde los correos de Amazon, evita pedidos duplicados y calcula el gasto anual.",
+        "ca": "Reconstrueix les teves compres a partir dels correus d'Amazon, evita comandes duplicades i calcula la despesa anual.",
+        "en": "Rebuilds your purchase history from Amazon emails, avoids duplicate orders and calculates your yearly spending."
+      },
+      "overview": {
+        "es": "Extensión Chrome MV3 que calcula y desglosa el gasto anual en Amazon desde las confirmaciones de Gmail, con OAuth de solo lectura, deduplicación y almacenamiento local.",
+        "ca": "Extensió Chrome MV3 que calcula i desglossa la despesa anual a Amazon a partir de les confirmacions de Gmail, amb OAuth de només lectura, deduplicació i emmagatzematge local.",
+        "en": "Chrome MV3 extension that calculates and breaks down yearly Amazon spending from Gmail confirmations, with read-only OAuth, deduplication and local storage."
+      },
+      "highlights": {
+        "es": [
+          "Deduplicación por número de pedido, para no contar dos veces los correos de una misma compra.",
+          "Sincronización incremental cada hora y escaneo completo semanal.",
+          "Exportación a .xlsx generada sin dependencias.",
+          "Interfaz en español e inglés; los datos no salen del navegador."
+        ],
+        "ca": [
+          "Deduplicació per número de comanda, per no comptar dues vegades els correus d'una mateixa compra.",
+          "Sincronització incremental cada hora i escaneig complet setmanal.",
+          "Exportació a .xlsx generada sense dependències.",
+          "Interfície en castellà i anglès; les dades no surten del navegador."
+        ],
+        "en": [
+          "Deduplication by order number, so emails from the same purchase are not counted twice.",
+          "Hourly incremental sync plus a weekly full scan.",
+          ".xlsx export generated with no dependencies.",
+          "Spanish and English interface; data never leaves the browser."
+        ]
+      },
+      "links": [
+        {
+          "label": {
+            "es": "Sitio web",
+            "ca": "Lloc web",
+            "en": "Website"
+          },
+          "url": "https://amazonspendingtracker.com",
+          "kind": "website"
+        },
+        {
+          "label": {
+            "es": "Chrome Web Store",
+            "ca": "Chrome Web Store",
+            "en": "Chrome Web Store"
+          },
+          "url": "https://chromewebstore.google.com/detail/amazon-spending-tracker/amejpfnehhohiffphbimdnilhjkpgfpb",
+          "kind": "store"
+        }
+      ]
+    },
+    {
+      "id": "100-cims",
+      "name": {
+        "es": "100 Cims",
+        "ca": "100 Cims",
+        "en": "100 Cims"
+      },
+      "status": "private",
+      "technologies": [
+        "Angular",
+        "TypeScript",
+        "Java",
+        "Spring Boot",
+        "PostgreSQL",
+        "Python",
+        "Docker"
+      ],
+      "description": {
+        "es": "Reúne las cimas del reto 100 Cims en un catálogo con fichas, fotografías y datos preparados automáticamente.",
+        "ca": "Reuneix els cims del repte 100 Cims en un catàleg amb fitxes, fotografies i dades preparades automàticament.",
+        "en": "Brings the 100 Cims challenge together in a catalogue with individual peak pages, photographs and automatically prepared data."
+      },
+      "overview": {
+        "es": "Aplicación sobre el reto de los 100 Cims de la FEEC. Usa Angular para consultar las cimas, una API REST con Spring Boot y PostgreSQL, y scripts en Python para recopilar y preparar los datos y las imágenes.",
+        "ca": "Aplicació sobre el repte dels 100 Cims de la FEEC. Fa servir Angular per consultar els cims, una API REST amb Spring Boot i PostgreSQL, i scripts en Python per recopilar i preparar les dades i les imatges.",
+        "en": "An application for the FEEC 100 Cims challenge. It uses Angular to browse the peaks, a Spring Boot and PostgreSQL REST API, and Python scripts to collect and prepare the data and images."
+      },
+      "highlights": {
+        "es": [
+          "API REST con Maven y PostgreSQL 17 en contenedor.",
+          "Proceso en Python que recopila los datos de las cimas y los carga en la base de datos.",
+          "Descarga y optimización de las imágenes a WebP.",
+          "Restauración del conjunto de datos desde CSV."
+        ],
+        "ca": [
+          "API REST amb Maven i PostgreSQL 17 en contenidor.",
+          "Procés en Python que recopila les dades dels cims i les carrega a la base de dades.",
+          "Descàrrega i optimització de les imatges a WebP.",
+          "Restauració del conjunt de dades des de CSV."
+        ],
+        "en": [
+          "REST API with Maven and PostgreSQL 17 in a container.",
+          "Python pipeline that collects the peak data and loads it into the database.",
+          "Image download and optimisation to WebP.",
+          "Dataset restore from CSV."
+        ]
+      },
+      "featured": true
+    },
+    {
+      "id": "race-hub",
+      "name": {
+        "es": "Race Hub",
+        "ca": "Race Hub",
+        "en": "Race Hub"
+      },
+      "status": "in-development",
+      "technologies": [
+        "Capacitor",
+        "Svelte",
+        "TypeScript",
+        "Kotlin",
+        "Room",
+        "WorkManager",
+        "Supabase"
+      ],
+      "description": {
+        "es": "Organiza tus carreras, calcula ritmos, splits y desnivel, y sincroniza recordatorios con Google Calendar.",
+        "ca": "Organitza les teves curses, calcula ritmes, parcials i desnivell, i sincronitza recordatoris amb Google Calendar.",
+        "en": "Organises your races, calculates paces, splits and elevation gain, and syncs reminders with Google Calendar."
+      },
+      "overview": {
+        "es": "App Android con Capacitor y una interfaz en Svelte 5. La parte nativa en Kotlin se encarga de los datos, la sincronización y los cálculos de ritmos, splits y desnivel.",
+        "ca": "App Android amb Capacitor i una interfície en Svelte 5. La part nativa en Kotlin s'encarrega de les dades, la sincronització i els càlculs de ritmes, splits i desnivell.",
+        "en": "An Android app built with Capacitor and a Svelte 5 interface. Its native Kotlin layer handles data, synchronisation and pace, split and elevation calculations."
+      },
+      "highlights": {
+        "es": [
+          "Room como única fuente de datos y WorkManager como único motor de sincronización con Supabase.",
+          "Ritmos, splits y desnivel calculados en Kotlin.",
+          "Sesión nativa con Credential Manager y calendario de Google.",
+          "Widget de inicio, recordatorios y alarmas nativas."
+        ],
+        "ca": [
+          "Room com a única font de dades i WorkManager com a únic motor de sincronització amb Supabase.",
+          "Ritmes, splits i desnivell calculats en Kotlin.",
+          "Sessió nativa amb Credential Manager i calendari de Google.",
+          "Widget d'inici, recordatoris i alarmes natives."
+        ],
+        "en": [
+          "Room as the single source of data and WorkManager as the sole sync engine against Supabase.",
+          "Paces, splits and elevation gain computed in Kotlin.",
+          "Native sign-in with Credential Manager and Google Calendar access.",
+          "Home-screen widget, reminders and native alarms."
+        ]
+      }
+    },
+    {
+      "id": "strava-garmin-platform",
+      "name": {
+        "es": "Asistente Strava/Garmin",
+        "ca": "Assistent Strava/Garmin",
+        "en": "Strava/Garmin Training Assistant"
+      },
+      "status": "private",
+      "technologies": [
+        "Cloudflare Workers",
+        "D1",
+        "Queues",
+        "R2",
+        "React",
+        "TypeScript",
+        "Hono",
+        "Vitest"
+      ],
+      "description": {
+        "es": "Procesa actividades de Strava y Garmin, las cruza con el plan y el clima, y publica un título y un resumen generados con IA.",
+        "ca": "Processa activitats de Strava i Garmin, les compara amb el pla d'entrenament i la meteorologia, i publica un títol i un resum generats amb IA.",
+        "en": "Processes Strava and Garmin activities, matches them against the training plan and weather, and publishes an AI-generated title and summary."
+      },
+      "overview": {
+        "es": "Worker de Cloudflare que recibe los webhooks de Strava, compara la actividad principal del día con el plan de entrenamiento y añade el clima y los datos de carrera. Después genera con IA el título y el resumen que publica en Strava.",
+        "ca": "Worker de Cloudflare que rep els webhooks de Strava, compara l'activitat principal del dia amb el pla d'entrenament i hi afegeix el temps i les dades de cursa. Després genera amb IA el títol i el resum que publica a Strava.",
+        "en": "A Cloudflare Worker that receives Strava webhooks, compares the day's main activity with the training plan, and adds weather and race data. It then uses AI to generate the title and summary published to Strava."
+      },
+      "highlights": {
+        "es": [
+          "Colas con reintentos y cola de mensajes fallidos, más cron horario y purga diaria.",
+          "Tokens de Strava cifrados con AES-GCM antes de guardarse en D1.",
+          "Panel de administración en React servido por el propio Worker.",
+          "Importación de archivos FIT de Garmin y streams de actividad guardados en R2."
+        ],
+        "ca": [
+          "Cues amb reintents i cua de missatges fallits, més cron horari i purga diària.",
+          "Tokens de Strava xifrats amb AES-GCM abans de desar-los a D1.",
+          "Tauler d'administració en React servit pel mateix Worker.",
+          "Importació d'arxius FIT de Garmin i streams d'activitat desats a R2."
+        ],
+        "en": [
+          "Queues with retries and a dead-letter queue, plus an hourly cron and a daily purge.",
+          "Strava tokens encrypted with AES-GCM before being stored in D1.",
+          "React admin dashboard served by the Worker itself.",
+          "Garmin FIT file import and activity streams stored in R2."
+        ]
+      },
+      "featured": true
+    },
+    {
+      "id": "race-spending-tracker",
+      "name": {
+        "es": "Race Spending Tracker",
+        "ca": "Race Spending Tracker",
+        "en": "Race Spending Tracker"
+      },
+      "status": "private",
+      "technologies": [
+        "JavaScript",
+        "Chrome Extensions",
+        "Gmail API",
+        "OAuth",
+        "Playwright"
+      ],
+      "description": {
+        "es": "Detecta inscripciones de nueve plataformas en tus correos y PDFs, recupera sus importes y controla el presupuesto anual.",
+        "ca": "Detecta inscripcions de nou plataformes als correus i PDFs, en recupera els imports i controla el pressupost anual.",
+        "en": "Detects entries from nine platforms in emails and PDFs, recovers their costs and tracks the yearly budget."
+      },
+      "overview": {
+        "es": "Extensión Chrome MV3 que calcula el gasto anual en inscripciones a carreras desde las confirmaciones de Gmail, con OAuth de solo lectura y almacenamiento local.",
+        "ca": "Extensió Chrome MV3 que calcula la despesa anual en inscripcions a curses a partir de les confirmacions de Gmail, amb OAuth de només lectura i emmagatzematge local.",
+        "en": "Chrome MV3 extension that calculates yearly race-registration spending from Gmail confirmations, with read-only OAuth and local storage."
+      },
+      "highlights": {
+        "es": [
+          "Adaptadores para nueve plataformas de inscripción.",
+          "Extracción acotada de texto de PDF para los importes que faltan en el correo.",
+          "Sincronización con reintentos, checkpoints y reanudación.",
+          "Presupuesto anual con aviso al acercarse al límite."
+        ],
+        "ca": [
+          "Adaptadors per a nou plataformes d'inscripció.",
+          "Extracció acotada de text de PDF per als imports que falten al correu.",
+          "Sincronització amb reintents, checkpoints i represa.",
+          "Pressupost anual amb avís en acostar-se al límit."
+        ],
+        "en": [
+          "Adapters for nine race-registration platforms.",
+          "Bounded PDF text extraction for amounts missing from the email.",
+          "Sync with retries, checkpoints and resume.",
+          "Yearly budget with a warning as the limit approaches."
+        ]
+      }
+    },
+    {
+      "id": "caixabank-spending-tracker",
+      "name": {
+        "es": "CaixaBank Spending Tracker",
+        "ca": "CaixaBank Spending Tracker",
+        "en": "CaixaBank Spending Tracker"
+      },
+      "status": "private",
+      "technologies": [
+        "JavaScript",
+        "Chrome Extensions",
+        "Gmail API",
+        "OAuth",
+        "Playwright"
+      ],
+      "description": {
+        "es": "Ordena y clasifica los movimientos a partir de los avisos del banco para mostrar tu gasto mensual con precisión.",
+        "ca": "Ordena i classifica els moviments a partir dels avisos del banc per mostrar la teva despesa mensual amb precisió.",
+        "en": "Orders and classifies transactions from bank alerts to give you an accurate view of your monthly spending."
+      },
+      "overview": {
+        "es": "Extensión Chrome MV3 que calcula el gasto mensual leyendo los avisos de CaixaBank en Gmail. Reconstruye el orden real de los movimientos encadenando saldos.",
+        "ca": "Extensió Chrome MV3 que calcula la despesa mensual llegint els avisos de CaixaBank a Gmail. Reconstrueix l'ordre real dels moviments encadenant saldos.",
+        "en": "Chrome MV3 extension that calculates monthly spending by reading CaixaBank alerts in Gmail. It reconstructs the real transaction order by chaining balances."
+      },
+      "highlights": {
+        "es": [
+          "Orden real de los movimientos a partir de la cadena de saldos.",
+          "Deduplicación por identificador de mensaje y por saldo.",
+          "Reglas de categoría con aprendizaje local y promoción a código.",
+          "Sincronización incremental con margen para los avisos tardíos."
+        ],
+        "ca": [
+          "Ordre real dels moviments a partir de la cadena de saldos.",
+          "Deduplicació per identificador de missatge i per saldo.",
+          "Regles de categoria amb aprenentatge local i promoció a codi.",
+          "Sincronització incremental amb marge per als avisos tardans."
+        ],
+        "en": [
+          "Real transaction order from the chain of balances.",
+          "Deduplication by message id and by balance.",
+          "Category rules with local learning and promotion into code.",
+          "Incremental sync with a margin for late alerts."
+        ]
+      }
+    },
+    {
+      "id": "riolan-solutions",
+      "name": {
+        "es": "Riolan Solutions",
+        "ca": "Riolan Solutions",
+        "en": "Riolan Solutions"
+      },
+      "status": "published",
+      "technologies": ["WordPress", "Elementor", "PHP", "HTML", "CSS"],
+      "description": {
+        "es": "Presenta los servicios, trabajos y vías de contacto de una empresa de lampistería y reformas en una sola web.",
+        "ca": "Presenta els serveis, els treballs i les vies de contacte d'una empresa de lampisteria i reformes en un sol web.",
+        "en": "Presents the services, completed work and contact options of a plumbing and renovation company on a single website."
+      },
+      "overview": {
+        "es": "Sitio corporativo de una sola página para una empresa de lampistería y reformas. Está hecho con WordPress y Elementor Pro e incluye sus servicios, una galería de trabajos y un formulario de contacto.",
+        "ca": "Lloc corporatiu d'una sola pàgina per a una empresa de lampisteria i reformes. Està fet amb WordPress i Elementor Pro i inclou els serveis, una galeria de treballs i un formulari de contacte.",
+        "en": "A one-page company website for a plumbing and home-renovation business. Built with WordPress and Elementor Pro, it presents the services, a gallery of completed work and a contact form."
+      },
+      "highlights": {
+        "es": [
+          "Identidad propia: paleta azul y morada, tipografías Poppins y Montserrat, e iconografía recortada a medida para los seis servicios.",
+          "Página única con cabecera fija, navegación por anclas y secciones de nosotros, servicios, trabajos y contacto.",
+          "Galería de 32 fotos de obra optimizadas a WebP.",
+          "Bloque de contacto con teléfono, urgencias 24 h y horario, más formulario con validación de campos."
+        ],
+        "ca": [
+          "Identitat pròpia: paleta blava i morada, tipografies Poppins i Montserrat, i iconografia retallada a mida per als sis serveis.",
+          "Pàgina única amb capçalera fixa, navegació per àncores i seccions de nosaltres, serveis, treballs i contacte.",
+          "Galeria de 32 fotos d'obra optimitzades a WebP.",
+          "Bloc de contacte amb telèfon, urgències 24 h i horari, més formulari amb validació de camps."
+        ],
+        "en": [
+          "Custom identity: blue and purple palette, Poppins and Montserrat, and cut-out iconography made for the six services.",
+          "Single page with a sticky header, anchor navigation and about, services, work and contact sections.",
+          "Gallery of 32 job-site photos optimised to WebP.",
+          "Contact block with phone, 24h emergencies and opening hours, plus a form with field validation."
+        ]
+      }
+    },
+    {
+      "id": "portfolio",
+      "name": {
+        "es": "Este portfolio",
+        "ca": "Aquest portafolis",
+        "en": "This portfolio"
+      },
+      "status": "published",
+      "technologies": [
+        "Astro",
+        "TypeScript",
+        "Cloudflare Workers",
+        "D1",
+        "Playwright",
+        "Vitest"
+      ],
+      "description": {
+        "es": "El sitio que estás leyendo: un CV en JSON que genera la web, el PDF y los formatos para máquinas, con el build como control de calidad.",
+        "ca": "El lloc que estàs llegint: un CV en JSON que genera el web, el PDF i els formats per a màquines, amb el build com a control de qualitat.",
+        "en": "The site you are reading: one JSON CV that generates the pages, the PDF and the machine-readable formats, with the build as the quality gate."
+      },
+      "overview": {
+        "es": "Sitio estático en Astro sobre Cloudflare Pages, trilingüe y sin framework de interfaz. Un solo cv.json alimenta las páginas, el PDF de cada idioma, el JSON-LD y los endpoints para máquinas; lo dinámico son Pages Functions.",
+        "ca": "Lloc estàtic en Astro sobre Cloudflare Pages, trilingüe i sense framework d'interfície. Un sol cv.json alimenta les pàgines, el PDF de cada idioma, el JSON-LD i els endpoints per a màquines; el dinàmic són Pages Functions.",
+        "en": "A static Astro site on Cloudflare Pages, trilingual and with no UI framework. A single cv.json feeds the pages, each language's PDF, the JSON-LD and the machine-readable endpoints; the dynamic parts are Pages Functions."
+      },
+      "highlights": {
+        "es": [
+          "CSP por hashes y sin unsafe-inline, recalculada desde el HTML en cada build.",
+          "Presupuestos de HTML, DOM, CSS y JS que fallan el build; Lighthouse bloquea si el LCP pasa de 2,5 s.",
+          "El PDF se genera y se comprueba en cada build: una hoja A4 y texto extraíble con dos motores.",
+          "Límites de uso atómicos en D1, probados contra una base real."
+        ],
+        "ca": [
+          "CSP per hashes i sense unsafe-inline, recalculada des de l'HTML a cada build.",
+          "Pressupostos d'HTML, DOM, CSS i JS que fan fallar el build; Lighthouse bloqueja si l'LCP passa de 2,5 s.",
+          "El PDF es genera i es comprova a cada build: un full A4 i text extraïble amb dos motors.",
+          "Límits d'ús atòmics a D1, provats contra una base real."
+        ],
+        "en": [
+          "A hash-based CSP with no unsafe-inline, recomputed from the HTML on every build.",
+          "HTML, DOM, CSS and JS budgets that fail the build; Lighthouse blocks when LCP goes over 2.5 s.",
+          "The PDF is generated and checked on every build: one A4 sheet, text extractable by two engines.",
+          "Atomic rate limits in D1, tested against a real database."
+        ]
+      },
+      "links": [
+        {
+          "label": {
+            "es": "Sitio web",
+            "ca": "Lloc web",
+            "en": "Website"
+          },
+          "url": "https://imadelmalki.com",
+          "kind": "website"
+        }
+      ],
+      "featured": true
+    }
+  ],
+  "resume": {
+    "label": {
+      "es": "Desarrollador de software | Angular - Java - Spring Boot",
+      "ca": "Desenvolupador de programari | Angular - Java - Spring Boot",
+      "en": "Software developer | Angular - Java - Spring Boot"
+    },
+    "skillGroups": [
+      {
+        "label": {
+          "es": "Frontend",
+          "ca": "Frontend",
+          "en": "Frontend"
+        },
+        "items": ["Angular", "TypeScript", "JavaScript", "HTML", "CSS"]
+      },
+      {
+        "label": {
+          "es": "Backend",
+          "ca": "Backend",
+          "en": "Backend"
+        },
+        "items": ["Java", "Spring Boot", "REST APIs", "JPA"]
+      },
+      {
+        "label": {
+          "es": "Datos y entrega",
+          "ca": "Dades i lliurament",
+          "en": "Data and delivery"
+        },
+        "items": ["SQL", "PostgreSQL", "Docker", "Git", "GitHub", "CI/CD"]
+      }
+    ],
+    "projectIds": ["100-cims", "strava-garmin-platform"],
+    "educationIds": ["daw"],
+    "certificateIds": [
+      "angular-devtalles",
+      "spring-boot-starters-viewnext",
+      "jpa-viewnext",
+      "sql-avanzado-viewnext",
+      "docker-devops-midu"
+    ]
+  },
+  "skills": [
+    {
+      "name": "Angular",
+      "level": "advanced",
+      "featured": true
+    },
+    {
+      "name": "TypeScript",
+      "level": "advanced",
+      "featured": true
+    },
+    {
+      "name": "Java",
+      "level": "advanced",
+      "featured": true
+    },
+    {
+      "name": "Spring Boot",
+      "level": "advanced",
+      "featured": true
+    },
+    {
+      "name": "Astro",
+      "level": "advanced",
+      "featured": true
+    },
+    {
+      "name": "Svelte",
+      "level": "intermediate"
+    },
+    {
+      "name": "Cloudflare Workers",
+      "level": "intermediate"
+    },
+    {
+      "name": "PostgreSQL",
+      "level": "advanced"
+    },
+    {
+      "name": "Supabase",
+      "level": "advanced"
+    },
+    {
+      "name": "Docker",
+      "level": "intermediate"
+    }
+  ]
+}

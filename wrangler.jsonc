@@ -1,0 +1,66 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "minimalist-portfolio",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-08-31",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "enable_request_signal",
+    "request_signal_passthrough",
+  ],
+  "d1_databases": [
+    {
+      "binding": "RATE_LIMIT_DB",
+      "database_name": "portfolio-rate-limits",
+      "database_id": "ad63aa37-1340-40a0-9d80-7813c6fe9f1b",
+      "preview_database_id": "a9838504-df7f-4129-a08e-df6132d2d04b",
+      "migrations_dir": "migrations",
+    },
+  ],
+  // El valor de arriba es el que se aplica si algún día falta el bloque de
+  // entorno, así que apunta al dataset **de producción** a propósito: Analytics
+  // Engine es de sólo añadir, y una tanda de tráfico real escrita por error en
+  // `portfolio_hits_preview` no se puede sacar de ahí. `env.preview` lo cambia.
+  "analytics_engine_datasets": [
+    {
+      "binding": "HITS",
+      "dataset": "portfolio_hits",
+    },
+  ],
+  "env": {
+    "preview": {
+      "d1_databases": [
+        {
+          "binding": "RATE_LIMIT_DB",
+          "database_name": "portfolio-rate-limits-preview",
+          "database_id": "a9838504-df7f-4129-a08e-df6132d2d04b",
+          "preview_database_id": "a9838504-df7f-4129-a08e-df6132d2d04b",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "analytics_engine_datasets": [
+        {
+          "binding": "HITS",
+          "dataset": "portfolio_hits_preview",
+        },
+      ],
+    },
+    "production": {
+      "d1_databases": [
+        {
+          "binding": "RATE_LIMIT_DB",
+          "database_name": "portfolio-rate-limits",
+          "database_id": "ad63aa37-1340-40a0-9d80-7813c6fe9f1b",
+          "preview_database_id": "a9838504-df7f-4129-a08e-df6132d2d04b",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "analytics_engine_datasets": [
+        {
+          "binding": "HITS",
+          "dataset": "portfolio_hits",
+        },
+      ],
+    },
+  },
+}

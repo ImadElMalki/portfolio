@@ -1,0 +1,204 @@
+---
+import { Image } from "astro:assets"
+
+import type { CvData, Locale } from "@/cv"
+import { yearRange } from "@/lib/cvFormat"
+import { localized } from "@/lib/i18n"
+import { companyLogo } from "@/lib/companyLogos"
+
+type OtherWork = CvData["otherWork"]
+
+interface Props {
+  locale: Locale
+  /**
+   * Las filas. Vacío en la portada, completo en `/prior-work/`.
+   *
+   * No es un detalle de implementación: es la razón de que este componente
+   * exista. Ver la nota de abajo.
+   */
+  items: OtherWork
+}
+
+const { locale, items } = Astro.props
+---
+
+{
+  /**
+   * Las doce filas de «Antes de programar», que la portada **no** trae.
+   *
+   * Hasta el 07-10-2026 viajaban en el HTML de cada visita: doce empleos con
+   * su logotipo, su puesto y su enlace, escondidos tras `display: none` hasta
+   * que alguien encontraba el visor del retrato. Escondido no es ausente —
+   * estaban en el código fuente, en el DOM y al alcance de cualquier lector
+   * automático—, y por decisión suya dejan de estarlo: ahora se descargan de
+   * `/prior-work/` al abrir el pliegue, como las fichas de proyecto se
+   * descargan de `/project-details/`.
+   *
+   * ## Por qué un componente y no un fragmento suelto
+   *
+   * Astro acota el CSS de cada componente con un `data-astro-cid-*` propio, y
+   * lo añade al último compuesto de cada selector: `.prior-list li` se emite
+   * como `.prior-list li[data-astro-cid-…]`. Unas filas traídas de otro
+   * componente no llevarían ese atributo y se pintarían sin estilo. Mismo
+   * componente en los dos sitios, mismo identificador, y las filas que llegan
+   * encajan con el CSS que ya está en la página.
+   *
+   * De ahí `items`: la portada lo monta vacío —se lleva el `<ul>` que hace de
+   * destino y la hoja de estilo, y ni una fila— y `/prior-work/` lo monta
+   * entero.
+   */
+}
+<ul class="prior-list" data-prior-work-list>
+  {
+    items.map(
+      ({ name, position, location, field, startDate, endDate, url }) => {
+        const logo = companyLogo(name)
+
+        return (
+          <li>
+            {/* El hueco existe **siempre**, tenga logo o no: es una columna de
+                la rejilla, y una fila sin él se la comería y desalinearía el
+                puesto. Hoy las doce lo tienen, pero eso es una casualidad del
+                contenido, no una garantía. */}
+            <span class="prior-logo" aria-hidden="true">
+              {logo && (
+                <Image
+                  class:list={["company-logo", logo.tone]}
+                  src={logo.image}
+                  alt=""
+                  width={20}
+                  height={20}
+                  densities={[1, 2]}
+                  format="webp"
+                  quality={90}
+                />
+              )}
+            </span>
+            <span class="prior-role">{localized(position, locale)}</span>
+            <span class="meta label-mono">
+              {/* El nombre enlaza cuando hay web, y es sólo el nombre: el mismo
+                  criterio que las certificaciones. Las doce filas enlazan; la
+                  rama de texto se queda por si alguna deja de hacerlo. */}
+              {url ? (
+                <a
+                  class="employer"
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {name}
+                </a>
+              ) : (
+                name
+              )}
+              {` · ${[
+                location && localized(location, locale),
+                localized(field, locale),
+                yearRange(startDate, endDate),
+              ]
+                .filter(Boolean)
+                .join(" · ")}`}
+            </span>
+          </li>
+        )
+      },
+    )
+  }
+</ul>
+
+<style>
+  .prior-list {
+    display: grid;
+    gap: 0;
+    list-style: none;
+    margin: 0.35rem 0 0;
+    padding: 0;
+  }
+
+  .prior-list li {
+    align-items: baseline;
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    gap: 0.25rem 1rem;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    padding: 0.55rem 0.15rem;
+  }
+
+  /**
+   * La columna de los logos.
+   *
+   * Antes iban pegados al nombre de la empresa, que está alineado a la derecha:
+   * eso los dejaba en **ocho x distintas repartidas en 180 px**, y doce marcas
+   * de 20 px esparcidas por el medio de las filas se leen como suciedad, no
+   * como una lista. Aquí forman una sola columna contra el margen.
+   *
+   * `align-items` de la fila es `baseline`, que con una imagen sola da un
+   * resultado impredecible según su alto; `center` la ata al renglón del
+   * puesto, que es lo que tiene al lado.
+   */
+  .prior-logo {
+    align-self: center;
+    display: flex;
+    height: 20px;
+    justify-content: center;
+    width: 20px;
+  }
+
+  /* El puesto manda la fila: es lo único que dice qué se hacía. La empresa, el
+     sector y los años son el renglón de al lado. */
+  .prior-role {
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  /* Tipografía, cuerpo y color salen de `.label-mono` (Layout). Aquí sólo se
+     desactivan las versalitas: un renglón entero en mayúsculas grita, y son
+     tres valores, no una etiqueta. */
+  /* Sin `nowrap`, a diferencia del renglón de las certificaciones: con
+     empresa, país, sector y años, el renglón más largo no cabe de una tirada a
+     anchos medios. */
+  .prior-list .meta {
+    text-align: right;
+    text-transform: none;
+  }
+
+  /**
+   * La empresa enlazada se distingue por el subrayado, no por el color.
+   *
+   * Mismo criterio que `a.name` en `Certifications.astro`: teñir de acento
+   * haría que un almacén pesara más que otro por tener web, y cuál tiene
+   * página no es lo que jerarquiza esta lista.
+   */
+  .employer {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--border-hover);
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.2s ease;
+  }
+
+  @media (hover: hover) {
+    .employer:hover {
+      text-decoration-color: var(--accent);
+    }
+  }
+
+  /* Las filas llegan de `/prior-work/` con el mismo identificador de ámbito
+     que este bloque, porque las pinta este mismo componente. Lo que envuelve a
+     la lista —el pliegue, su chevrón, el aire— sigue en `Experience.astro`.
+
+     A 320 px, dos columnas partían «Operario de producción» por la mitad. El
+     logo mantiene la suya: es lo que alinea la lista, y el renglón de la
+     empresa baja a la segunda fila sin meterse debajo del logo. */
+  @media (width <= 700px) {
+    .prior-list li {
+      grid-template-columns: 20px minmax(0, 1fr);
+    }
+
+    .prior-list .meta {
+      grid-column: 2;
+      text-align: left;
+    }
+  }
+</style>

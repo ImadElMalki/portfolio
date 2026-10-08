@@ -1,0 +1,22 @@
+---
+/**
+ * El JS de la landing de servicios, sin marcado propio.
+ *
+ * Sólo monta el formulario. `PortfolioRuntime.astro` no vale aquí: arrastra la
+ * consola, la vista Markdown, el botón de imprimir y el revelado del hero, que
+ * en esta página no existen, y son ~9 KB de los 13 del sitio.
+ *
+ * Un componente con un `<script>` y no un `<script>` suelto en la landing por
+ * la misma razón que en la portada: Astro emite un chunk por `<script>`, y así
+ * el punto de montaje está en un sitio con nombre.
+ */
+---
+
+<script>
+  import { mountContactForm } from "@/lib/contactForm"
+  import { onPageLoad } from "@/lib/pageLifecycle"
+
+  onPageLoad((signal) => {
+    mountContactForm(signal)
+  })
+</script>

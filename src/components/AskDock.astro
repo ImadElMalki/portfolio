@@ -1,0 +1,729 @@
+---
+/**
+ * El disparador del asistente: una píldora fija en el canto inferior.
+ *
+ * Sustituye a la barra de pregunta del hero, que a su vez había sustituido al
+ * quinto puerto de la fila de contacto. Las dos anteriores compartían el mismo
+ * defecto: **vivían en el flujo de la portada**. La barra empujaba el retrato al
+ * aparecer y lo volvía a empujar con cada respuesta, porque su caja crecía hasta
+ * 22 rem dentro de una rejilla centrada verticalmente. Un panel que se abre
+ * encima no ocupa sitio en el documento, así que la página no puede moverse.
+ *
+ * Y de paso el asistente deja de ser una cosa de la portada: está en todas las
+ * páginas indexables, porque quien aprende algo en el portfolio lo prueba en
+ * «Sobre mí», y que allí no pasara nada es la peor respuesta posible.
+ *
+ * ## Aquí sólo está el botón
+ *
+ * El panel entero lo construye `askDock.ts` la primera vez que se abre. Emitirlo
+ * desde el servidor serían ~15 elementos en **cada** página que casi nadie llega
+ * a abrir, y el presupuesto de DOM del build va contado —ver
+ * `scripts/check-build.mjs`—.
+ *
+ * ## Sin JavaScript no se pinta
+ *
+ * Un botón que no responde es peor que no tener botón. La regla cuelga de
+ * `:root[data-js]`, y ese atributo lo escribe el guion en línea del `<head>`
+ * **antes del primer pintado**: con JS la píldora ya está ahí cuando se pinta el
+ * primer fotograma —así que no desplaza nada— y sin JS no llega a existir. Es el
+ * mismo recurso que usaba `HeroAsk`. Hasta el 06-10-2026 colgaba de
+ * `data-view`, que escribía ese mismo guion para las vistas.
+ */
+import type { Locale } from "@/cv"
+import { localized, localizedPath, t } from "@/lib/i18n"
+import { PROJECTS_COPY } from "@/data/projects"
+import { PUBLIC_PAGE_SLUGS } from "@/lib/publicPages"
+import Ask from "@/icons/Ask.astro"
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+
+/**
+ * En la ficha de un proyecto, la píldora lo dice.
+ *
+ * El panel es el mismo y pregunta lo mismo; lo que cambia es que desde una
+ * ficha «esto» tiene referente —el guion manda la ruta y el prompt la usa, ver
+ * `pickPath`—, y un rótulo que no lo dijera dejaría esa posibilidad sin
+ * anunciar. Se resuelve aquí y no en `Layout.astro` porque es asunto del
+ * disparador, y con `Astro.url` no hace falta pasarlo de mano en mano.
+ */
+const projectsSlug = PUBLIC_PAGE_SLUGS.projects[locale]
+const onProjectPage = new RegExp(
+  `^${localizedPath(locale, projectsSlug)}/[^/]+/?$`,
+).test(Astro.url.pathname)
+const openLabel = onProjectPage
+  ? localized(PROJECTS_COPY.askHere, locale)
+  : t(locale, "askOpen")
+---
+
+<div
+  class="ask-dock no-print"
+  data-ask-dock
+  data-locale={locale}
+  data-ask-url="/api/ask"
+  data-ask-questions-url={`/ask-questions/${locale}.json`}
+  data-ask-actions-url={localizedPath(locale, "/ask-actions.json")}
+>
+  <button
+    class="ask-dock-trigger"
+    type="button"
+    data-ask-dock-trigger
+    aria-expanded="false"
+    title={t(locale, "askOpenHint")}
+  >
+    <span class="ask-dock-glyph" aria-hidden="true"><Ask /></span>
+    <span class="ask-dock-text">{openLabel}</span>
+  </button>
+</div>
+
+<style>
+  /**
+   * Sin JS no existe. Ver la nota de arriba: `data-js` lo escribe el guion en
+   * línea del `<head>` antes del primer pintado, así que esto no es un botón que
+   * aparece tarde, es un botón que sólo se emite donde puede funcionar.
+   */
+  .ask-dock {
+    display: none;
+  }
+
+  :global(:root[data-js]) .ask-dock {
+    display: block;
+  }
+
+  /**
+   * La píldora, anclada al canto inferior derecho.
+   *
+   * `position: fixed` y no `sticky`: tiene que estar donde está mire quien mire
+   * la página, y no depender de en qué sección se haya quedado el scroll. El
+   * `z-index` la pone por encima del contenido pero por debajo del top layer,
+   * donde vive el propio panel cuando se abre.
+   *
+   * Los márgenes van con `env(safe-area-inset-*)`: en un móvil con barra de
+   * gestos, `1rem` a secas la deja debajo del indicador de inicio.
+   */
+  .ask-dock-trigger {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    font-family: var(--font-mono);
+    font-size: var(--label-size);
+    gap: 0.45rem;
+    letter-spacing: var(--label-tracking);
+    /* El mínimo de la WCAG 2.2 (2.5.8) para un objetivo de puntero. */
+    min-block-size: 44px;
+    padding: 0 0.9rem;
+    position: fixed;
+    right: calc(1rem + env(safe-area-inset-right, 0px));
+    text-transform: uppercase;
+    transition:
+      border-color 160ms ease,
+      box-shadow 200ms ease,
+      color 160ms ease;
+    z-index: 20;
+  }
+
+  /**
+   * La llegada.
+   *
+   * En CSS, como todo lo que es un único elemento que entra: una curva con
+   * rebote hace el gesto sin una línea de JS. Mientras el proyecto usó Motion
+   * (hasta el 02-10-2026) ésta fue la excepción a «un muelle en un suceso
+   * discreto va con Motion», por no cargar la librería en todas las páginas.
+   *
+   * El retardo la deja entrar **después** del escalonado de los puertos del
+   * hero, que termina a los 0,16 s. Antes se cruzarían dos entradas en la misma
+   * pantalla.
+   *
+   * `both` y no `forwards`: el estado de partida tiene que valer también
+   * durante el retardo, o la píldora se vería opaca, desaparecería y volvería.
+   */
+  @media screen and (prefers-reduced-motion: no-preference) {
+    .ask-dock-trigger {
+      animation: ask-dock-enter 360ms cubic-bezier(0.34, 1.56, 0.64, 1) 380ms
+        both;
+    }
+  }
+
+  @keyframes ask-dock-enter {
+    from {
+      opacity: 0;
+      translate: 0 10px;
+    }
+  }
+
+  /* El mismo chasquido que los puertos de contacto y los controles de la barra. */
+  .ask-dock-trigger:active {
+    scale: 0.97;
+  }
+
+  .ask-dock-glyph {
+    align-items: center;
+    color: var(--accent);
+    display: flex;
+    flex: 0 0 auto;
+    transition: scale 160ms ease;
+  }
+
+  /* Al acento y con halo, no al filete gris: es el disparador del asistente y
+     hasta ahora respondía más flojo que un chip de tecnología. El glifo crece
+     con él, que es donde está el color en reposo. */
+  @media (hover: hover) {
+    .ask-dock-trigger:hover {
+      border-color: var(--accent);
+      box-shadow: var(--glow-hover);
+      color: var(--text);
+    }
+
+    .ask-dock-trigger:hover .ask-dock-glyph {
+      scale: 1.12;
+    }
+  }
+
+  .ask-dock-trigger:focus-visible {
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 1px var(--focus-ring);
+    outline: none;
+  }
+
+  /**
+   * Por debajo de 480 px se queda sólo el icono.
+   *
+   * El rótulo entero mide media pantalla en un móvil estrecho, y ahí compite
+   * con el contenido en vez de acompañarlo. El nombre accesible no se pierde:
+   * lo sigue poniendo el `title`, y el icono es el mismo que abre el panel.
+   */
+  @media (max-width: 480px) {
+    .ask-dock-text {
+      border: 0;
+      clip-path: inset(50%);
+      height: 1px;
+      overflow: hidden;
+      position: absolute;
+      white-space: nowrap;
+      width: 1px;
+    }
+
+    .ask-dock-trigger {
+      inline-size: 44px;
+      justify-content: center;
+      padding: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ask-dock-trigger {
+      transition: none;
+    }
+
+    .ask-dock-glyph {
+      transition: none;
+    }
+
+    .ask-dock-trigger:active {
+      scale: 1;
+    }
+
+    .ask-dock-trigger:hover .ask-dock-glyph {
+      scale: 1;
+    }
+  }
+</style>
+
+<style>
+  /**
+   * El panel.
+   *
+   * Todo lo de dentro lo crea `askDock.ts`, así que Astro no puede verlo para
+   * ponerle el atributo de ámbito: va con `:global` colgando de `.ask-dock`, que
+   * sí lo lleva. Es el mismo recurso que usaba la caja de respuesta del hero.
+   *
+   * Es un `<dialog>` abierto con `showModal()`, así que vive en el top layer: no
+   * hace falta `z-index`, ni atrapar el foco a mano, ni escuchar Escape, ni
+   * poner `inert` en el resto de la página. El navegador hace las cuatro.
+   *
+   * Anclado abajo a la derecha en vez de centrado: sale de donde está el botón
+   * que lo abre, y así el gesto se lee como que la píldora crece. En móvil se
+   * pega a los tres cantos y ocupa lo que necesita.
+   */
+  .ask-dock :global(.ask-dock-panel) {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    flex-direction: column;
+    inline-size: min(30rem, calc(100vw - 2rem));
+    inset: auto 1rem calc(1rem + env(safe-area-inset-bottom, 0px)) auto;
+    max-block-size: min(34rem, calc(100vh - 2rem));
+    padding: 0;
+  }
+
+  /**
+   * El `display` va **sólo con el diálogo abierto**, y esto no es un detalle.
+   *
+   * La hoja del navegador esconde un `<dialog>` cerrado con `display: none`.
+   * Declarar `display: flex` en el selector de siempre lo pisa, así que el panel
+   * se quedaba en pantalla después de cerrarlo: sin fondo modal, sin atrapar el
+   * foco y sin forma de quitarlo. Se veía cerrado en `dialog.open` y abierto en
+   * la página, que es la peor combinación posible — lo cazó la prueba de Escape.
+   */
+  .ask-dock :global(.ask-dock-panel[open]) {
+    display: flex;
+  }
+
+  .ask-dock :global(.ask-dock-panel)::backdrop {
+    /* Muy suave: el panel no tapa la página, se pone encima de ella, y un velo
+       opaco convertiría una pregunta rápida en salir del sitio. */
+    background: rgb(0 0 0 / 0.32);
+  }
+
+  .ask-dock :global(.ask-dock-head) {
+    align-items: center;
+    border-block-end: 1px solid var(--border);
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    padding: 0.7rem 0.9rem;
+  }
+
+  .ask-dock :global(.ask-dock-title) {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--label-size);
+    font-weight: 700;
+    letter-spacing: var(--label-tracking);
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  .ask-dock :global(.ask-dock-x) {
+    background: none;
+    border: 0;
+    color: var(--text-faint);
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    /* 44 px de objetivo aunque el aspa mida 12: WCAG 2.2 (2.5.8). */
+    min-block-size: 44px;
+    min-inline-size: 44px;
+    padding: 0;
+  }
+
+  /**
+   * La conversación, con la voz del terminal.
+   *
+   * La superficie, la trama de puntos y la mono a 0,8 rem que tenía el registro
+   * de la consola: la voz de una máquina respondiendo, que es lo que es.
+   *
+   * `flex: 1` con desplazamiento propio: lo que crece es el interior del panel,
+   * y el panel ya tiene su alto acotado. Así una respuesta de mil tokens no
+   * empuja el campo de escritura fuera de la pantalla.
+   */
+  .ask-dock :global(.ask-dock-answer) {
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+    padding: 0.9rem;
+    position: relative;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    scrollbar-width: thin;
+  }
+
+  .ask-dock :global(.ask-dock-answer)::before {
+    background-image: var(--dot-grid);
+    background-size: var(--dot-grid-size);
+    content: "";
+    inset: 0;
+    opacity: 0.35;
+    pointer-events: none;
+    position: absolute;
+  }
+
+  @media (prefers-contrast: more) {
+    .ask-dock :global(.ask-dock-answer)::before {
+      display: none;
+    }
+  }
+
+  .ask-dock :global(.ask-dock-line) {
+    color: var(--text-subtle);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.65;
+    margin: 0;
+    position: relative;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* La pregunta, en el tono del texto y con el acento delante: es el eco de lo
+     que se ha escrito, y sin marcarlo las dos voces se confunden. */
+  .ask-dock :global(.ask-dock-line--question) {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .ask-dock :global(.ask-dock-line--question)::before {
+    color: var(--accent);
+    content: "> ";
+  }
+
+  .ask-dock :global(.ask-dock-line--err) {
+    color: var(--warning);
+  }
+
+  /* El aviso de cupo: es información de servicio, no parte de la respuesta. */
+  .ask-dock :global(.ask-dock-line--note) {
+    color: var(--text-faint);
+    font-size: 0.72rem;
+  }
+
+  .ask-dock :global(.ask-dock-turn + .ask-dock-turn) {
+    margin-block-start: 0.85rem;
+  }
+</style>
+
+<style>
+  /**
+   * El cursor de la línea viva.
+   *
+   * Un bloque que parpadea al final de lo que se está recibiendo. Antes había un
+   * «pensando…» y luego el texto de golpe, y entre los dos no había forma de
+   * distinguir «está escribiendo» de «se ha colgado».
+   *
+   * Va en un `::after` y no en un elemento: la línea se reescribe entera con
+   * cada trozo, y un hijo se perdería en cada reescritura.
+   */
+  .ask-dock :global(.ask-dock-line--live)::after {
+    animation: ask-dock-blink 1.1s steps(1) infinite;
+    background: var(--accent);
+    content: "";
+    display: inline-block;
+    block-size: 0.95em;
+    inline-size: 0.5em;
+    margin-inline-start: 0.15em;
+    vertical-align: text-bottom;
+  }
+
+  @keyframes ask-dock-blink {
+    0%,
+    50% {
+      opacity: 1;
+    }
+    50.01%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /**
+   * Sin movimiento, el cursor sigue existiendo: se queda encendido.
+   *
+   * Quien pide menos movimiento pide eso, no el mismo parpadeo más lento —la
+   * regla del skill `motion-animations`—, y la marca de «esto sigue llegando»
+   * no puede depender de una animación que no va a correr.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .ask-dock :global(.ask-dock-line--live)::after {
+      animation: none;
+      opacity: 1;
+    }
+  }
+
+  /* El pie: cómo se cierra. En versalitas mono, como el resto de rótulos del
+     sitio. Llevó también el puente a la consola hasta el 06-10-2026. */
+  .ask-dock :global(.ask-dock-foot) {
+    align-items: center;
+    border-block-start: 1px solid var(--border);
+    color: var(--text-faint);
+    display: flex;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: var(--label-size);
+    gap: 0.75rem;
+    justify-content: space-between;
+    letter-spacing: var(--label-tracking);
+    margin-block-start: 0.85rem;
+    padding-block-start: 0.5rem;
+    position: relative;
+    text-transform: uppercase;
+  }
+
+  /**
+   * La línea de escritura, con el filete y la superficie del sitio.
+   *
+   * El acento delante en vez de un icono: es un elemento menos, y el `>` dice
+   * que el renglón está vivo.
+   */
+  .ask-dock :global(.ask-dock-field) {
+    align-items: center;
+    border-block-start: 1px solid var(--border);
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.6rem 0.9rem;
+  }
+
+  .ask-dock :global(.ask-dock-field)::before {
+    color: var(--accent);
+    content: ">";
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+  }
+
+  .ask-dock :global(.ask-dock-input) {
+    background: none;
+    border: 0;
+    caret-color: var(--accent);
+    color: var(--text);
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    min-inline-size: 0;
+    outline: none;
+    padding: 0;
+  }
+
+  .ask-dock :global(.ask-dock-input)::placeholder {
+    /* Sin cortar con puntos suspensivos: a 375 px la pregunta entera no cabe y
+       vale más leer media que leer «Pregunta lo que qui…». */
+    color: var(--text-faint);
+    opacity: 1;
+  }
+
+  .ask-dock :global(.ask-dock-field):focus-within {
+    box-shadow: inset 0 1px 0 0 var(--focus-ring);
+  }
+
+  /**
+   * Los dos botones sin caja del panel: «Nueva» en la cabecera y el del
+   * renglón. Lo común va junto —son el mismo gesto en dos sitios— y abajo queda
+   * lo que de verdad los distingue.
+   *
+   * 44 px de objetivo, como el aspa, aunque la flecha mida doce.
+   */
+  .ask-dock :global(.ask-dock-send),
+  .ask-dock :global(.ask-dock-new) {
+    background: none;
+    border: 0;
+    color: var(--text-faint);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    min-block-size: 44px;
+    transition: color 160ms ease;
+  }
+
+  /**
+   * El botón del renglón: pregunta, y para lo que está llegando.
+   *
+   * El acento sólo cuando hay algo que parar. En reposo acompaña al campo en el
+   * gris del sitio; si se encendiera siempre, competiría con el `>` del renglón
+   * y con la píldora que abre el panel, que ya son dos acentos en pantalla.
+   */
+  .ask-dock :global(.ask-dock-send) {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    font-size: 0.95rem;
+    justify-content: center;
+    line-height: 1;
+    min-inline-size: 44px;
+    padding: 0;
+  }
+
+  .ask-dock :global(.ask-dock-send--stop) {
+    color: var(--accent);
+  }
+
+  /**
+   * Los dos controles de la cabecera, juntos a la derecha.
+   *
+   * El encabezado reparte con `space-between`, así que sin agruparlos «Nueva» se
+   * habría quedado en el centro, lejos del aspa y como si fuera de otro sitio.
+   */
+  .ask-dock :global(.ask-dock-tools) {
+    align-items: center;
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .ask-dock :global(.ask-dock-new) {
+    font-size: var(--label-size);
+    letter-spacing: var(--label-tracking);
+    padding-inline: 0.5rem;
+    text-transform: uppercase;
+  }
+
+  /**
+   * «Sigue escribiendo abajo».
+   *
+   * Flota sobre el renglón mientras la respuesta crece y quien lee está más
+   * arriba. Va anclada al diálogo y no a la caja de respuesta: lo posicionado
+   * dentro de un contenedor con desplazamiento se va con el contenido, que es
+   * justo lo que esto no puede hacer. Ver la nota de `askDock.ts`.
+   *
+   * 32 px de alto y no 44: pasa por encima de lo que se está leyendo, y aquí el
+   * tamaño de objetivo se cumple con holgura sin tapar dos renglones.
+   */
+  .ask-dock :global(.ask-dock-jump) {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    bottom: 4.4rem;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    font-family: var(--font-mono);
+    font-size: var(--label-size);
+    gap: 0.3rem;
+    inset-inline-end: 0.9rem;
+    letter-spacing: var(--label-tracking);
+    min-block-size: 32px;
+    padding: 0 0.7rem;
+    position: absolute;
+    text-transform: uppercase;
+  }
+
+  /* `display: flex` pisa el `hidden` del elemento, y la píldora se quedaría
+     siempre en pantalla. El mismo motivo por el que el panel declara su
+     `display` sólo con `[open]`. */
+  .ask-dock :global(.ask-dock-jump[hidden]) {
+    display: none;
+  }
+
+  .ask-dock :global(.ask-dock-jump-glyph) {
+    color: var(--accent);
+  }
+
+  /* La fila de reintento, pegada al mensaje de fallo al que pertenece. */
+  .ask-dock :global(.ask-dock-again),
+  .ask-dock :global(.ask-dock-links) {
+    margin-block-start: 0.45rem;
+  }
+
+  /**
+   * Las dos salidas: escribirle y bajarse el CV.
+   *
+   * Entre la respuesta y el renglón, en su propia fila: están desde que se abre
+   * el panel y no se mueven. Enlaces y no píldoras, porque las píldoras del
+   * panel son las sugerencias y las fichas —cosas que pasan **dentro**— y esto
+   * saca de la conversación.
+   *
+   * Nace `hidden` y se enseña con la tabla, que es una petición; sin la regla de
+   * abajo, `display: flex` pisaría ese `hidden` y la fila saldría vacía.
+   */
+  .ask-dock :global(.ask-dock-exits) {
+    border-block-start: 1px solid var(--border);
+    display: flex;
+    font-family: var(--font-mono);
+    font-size: var(--label-size);
+    gap: 0.9rem;
+    letter-spacing: var(--label-tracking);
+    padding: 0.5rem 0.9rem;
+    text-transform: uppercase;
+  }
+
+  .ask-dock :global(.ask-dock-exits[hidden]) {
+    display: none;
+  }
+
+  .ask-dock :global(.ask-dock-cta) {
+    color: var(--accent);
+    text-decoration: none;
+    transition: color 160ms ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ask-dock :global(.ask-dock-cta) {
+      transition: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ask-dock :global(.ask-dock-send),
+    .ask-dock :global(.ask-dock-new) {
+      transition: none;
+    }
+  }
+
+  /**
+   * Las sugerencias, sólo antes de la primera pregunta.
+   *
+   * Salen del banco de `askQuestions.ts`, con su rotación. Cuatro y no dos:
+   * aquí no compiten con nada, el panel se abre vacío.
+   *
+   * El aspecto lo pone `.chip-mono`, que vive en el `<style is:global>` de
+   * `Layout.astro`. Aquí queda sólo el
+   * relleno de la fila, que es lo único de este panel: cuadra las píldoras con
+   * las guardas de la caja.
+   */
+  .ask-dock :global(.ask-dock-suggestions) {
+    padding: 0 0.9rem 0.9rem;
+  }
+
+  @media (hover: hover) {
+    .ask-dock :global(.ask-dock-x:hover),
+    .ask-dock :global(.ask-dock-new:hover),
+    .ask-dock :global(.ask-dock-send:hover) {
+      color: var(--text);
+    }
+
+    .ask-dock :global(.ask-dock-cta:hover) {
+      text-decoration: underline;
+    }
+
+    .ask-dock :global(.ask-dock-send--stop:hover) {
+      color: var(--warning);
+    }
+  }
+
+  /**
+   * A pantalla completa en móvil.
+   *
+   * Se pegaba a tres cantos con medio centímetro de margen y un techo del 80 %,
+   * y el resultado era una ventana flotante sobre una página que no se puede
+   * tocar: se veía el portfolio asomando por los cuatro lados de algo con lo
+   * que además hay que escribir. Ocupando la pantalla entera, el asistente es
+   * dónde se está, no una capa encima.
+   *
+   * `dvh` y no `vh`: en un móvil `100vh` cuenta la barra del navegador aunque
+   * esté desplegada, así que el pie del panel —donde está el campo— se quedaba
+   * por debajo del borde visible. Es el mismo motivo por el que el `body` usa
+   * `dvh` en `Layout.astro`.
+   *
+   * El corte sube de 480 a los 700 px de la casa, que es donde se apilan el
+   * hero, las secciones y el panel de servicios: entre 480 y 700 el panel
+   * flotante se quedaba más ancho que la columna de texto que tapaba.
+   */
+  @media (width <= 700px) {
+    .ask-dock :global(.ask-dock-panel) {
+      block-size: 100dvh;
+      border: 0;
+      border-radius: 0;
+      inline-size: auto;
+      inset: 0;
+      max-block-size: none;
+      /* El agente de usuario le pone a todo `<dialog>` un
+         `max-width: calc(100% - 6px - 2em)`, y sin anularlo el panel se quedaba
+         38 px corto a cada lado por mucho `inset: 0` que lleve. Medido: 352 px
+         en una pantalla de 390. */
+      max-inline-size: none;
+      padding-block-end: env(safe-area-inset-bottom, 0px);
+    }
+
+    /* Y el pie se calla entero: sin teclado no hay Esc, que es lo único que
+       dice, y el pie de un panel a pantalla completa es el sitio con menos
+       espacio que sobra. La cruz de la cabecera sigue ahí, que es por donde se
+       cierra aquí, y las dos salidas tienen fila propia. */
+    .ask-dock :global(.ask-dock-foot) {
+      display: none;
+    }
+  }
+</style>

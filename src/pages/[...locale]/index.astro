@@ -1,0 +1,117 @@
+---
+import Layout from "@/layouts/Layout.astro"
+
+import About from "@/components/sections/About.astro"
+import Certifications from "@/components/sections/Certifications.astro"
+import Education from "@/components/sections/Education.astro"
+import Experience from "@/components/sections/Experience.astro"
+import Hero from "@/components/sections/Hero.astro"
+import Languages from "@/components/sections/Languages.astro"
+import Projects from "@/components/sections/Projects.astro"
+import Skills from "@/components/sections/Skills.astro"
+import Contact from "@/components/sections/Contact.astro"
+import ServicesBanner from "@/components/ServicesBanner.astro"
+import PortfolioRuntime from "@/components/PortfolioRuntime.astro"
+import SectionNav from "@/components/SectionNav.astro"
+
+import { getCv, type Locale } from "@/cv"
+import { localeStaticPaths, localized } from "@/lib/i18n"
+import { WEB_SECTIONS, type SectionName } from "@/lib/sections"
+
+export const getStaticPaths = localeStaticPaths
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+const cv = await getCv()
+
+const SECTION_COMPONENTS = {
+  hero: Hero,
+  about: About,
+  experience: Experience,
+  education: Education,
+  certificates: Certifications,
+  languages: Languages,
+  projects: Projects,
+  skills: Skills,
+} as const satisfies Record<SectionName, typeof Hero>
+---
+
+<Layout cv={cv} locale={locale} title={localized(cv.basics.headline, locale)}>
+  <main id="main">
+    <div id="web-view">
+      <SectionNav locale={locale} />
+      {
+        /* El banner de negocios va detrás de Proyectos y no en el hero. Desde
+           el 06-10-2026 el primer pantallazo es de quien contrata, y la oferta
+           para negocios cae donde ya se ha visto qué se ha construido, que es
+           lo que la respalda. Fuera de `WEB_SECTIONS` por lo mismo que el
+           formulario: no es una sección del CV. */
+        WEB_SECTIONS.map(({ name }) => {
+          const Component = SECTION_COMPONENTS[name]
+          return (
+            <>
+              <Component cv={cv} locale={locale} />
+              {name === "projects" && <ServicesBanner locale={locale} />}
+            </>
+          )
+        })
+      }
+      {
+        /* Fuera de `WEB_SECTIONS`: el formulario cierra la página, pero no es
+           una sección del CV —ni `/cv.md` ni el PDF lo llevan—. Ver
+           `CLOSING_SECTION_ID` en `src/lib/sections.ts`. */
+      }
+      <Contact cv={cv} locale={locale} />
+    </div>
+  </main>
+  <PortfolioRuntime />
+</Layout>
+
+<style>
+  #web-view {
+    width: min(100%, calc(var(--page-width) + 6rem));
+    padding: clamp(2.25rem, 5vw, 4.75rem) clamp(1.25rem, 5vw, 3rem)
+      clamp(2rem, 4vw, 3rem);
+    margin: 0 auto;
+    min-width: 0;
+  }
+
+  /**
+   * El aire sobre el pie, contado.
+   *
+   * Se suman tres cosas: el margen inferior de la última sección, este relleno
+   * y el relleno superior del propio pie. En escritorio eran 5,5 + 7 + 2,5 rem,
+   * o sea unos 240 px de nada entre el botón de enviar y la primera línea del
+   * pie. El relleno baja a 3 rem y la última sección cede la mitad de su
+   * margen: el pie sigue separado del contenido, pero no desterrado.
+   *
+   * `section:last-of-type` y no una clase en `Contact`: el margen lo pone
+   * `Section.astro` para todas por igual, y la excepción es de posición —la
+   * última—, no de contenido.
+   */
+  #web-view section:last-of-type {
+    margin-bottom: clamp(1.5rem, 3vw, 2rem);
+  }
+
+  /* En móvil ya estaba recortado, y la última sección cede aquí también. */
+  @media (width <= 700px) {
+    #web-view {
+      padding-top: 1.75rem;
+      padding-bottom: 1.5rem;
+    }
+
+    #web-view section:last-of-type {
+      margin-bottom: 1.5rem;
+    }
+  }
+
+  @media print {
+    #web-view {
+      width: 100%;
+      padding: 0;
+    }
+  }
+</style>

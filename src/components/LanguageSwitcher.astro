@@ -1,0 +1,386 @@
+---
+import type { Locale } from "@/cv"
+import {
+  localizedPath,
+  LOCALE_NAMES,
+  LOCALE_TAGS,
+  LOCALES,
+  t,
+} from "@/lib/i18n"
+
+interface Props {
+  locale: Locale
+  /**
+   * Destino de cada idioma. Por defecto, la portada en ese idioma.
+   *
+   * `| undefined` explícito: con `exactOptionalPropertyTypes`, Layout no podría
+   * reenviar su propio prop opcional sin comprobarlo antes.
+   */
+  hrefs?: Record<Locale, string> | undefined
+}
+
+const { locale, hrefs } = Astro.props
+---
+
+{
+  /* Las otras dos páginas se precargan, porque son el único destino de este
+     control y tenerlas en caché antes del clic hace el cambio inmediato. Pero
+     no al cargar: `languagePrefetch.ts` las pide tras el `load` y en reposo,
+     para que no compitan con el primer pintado (PERF-03). `hover` cubre a quien
+     llegue antes que ese momento. */
+}
+{
+  /**
+   * En móvil, un botón; en escritorio, las tres celdas de siempre.
+   *
+   * Las tres celdas son 132 px que, junto a los seis controles de vista, no
+   * caben en la fila de un teléfono: la barra se partía en dos filas —idiomas
+   * arriba, el resto debajo— y ocupaba 102 px justo encima del hero. Plegadas a
+   * un botón con el idioma actual, la fila entra entera y el conmutador sigue a
+   * un toque.
+   *
+   * El marcado es el mismo en los dos anchos y lo reparte el CSS: en ancho el
+   * botón no existe y el `<nav>` se ve inline como siempre, así que no hay dos
+   * versiones que mantener ni nada que reconstruir al girar el teléfono.
+   */
+}
+<div class="locale-control" data-bar-menu="locale">
+  <button
+    class="bar-control locale-trigger"
+    type="button"
+    data-bar-menu-trigger
+    aria-controls="locale-panel"
+    aria-expanded="false"
+    title={LOCALE_NAMES[locale]}
+  >
+    {
+      /* El código visible **es** el nombre accesible, y el rótulo oculto lo
+         completa: «ES Idioma». Con un `aria-label` que no contuviera el «ES» a
+         la vista, un mando de voz que dijera «pulsa ES» no encontraría el botón
+         (WCAG 2.5.3). */
+    }
+    <span class="cell-label">{locale.toUpperCase()}</span>
+    <span class="sr-only">{t(locale, "language")}</span>
+    <svg
+      class="locale-caret"
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width="12"
+      height="12"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="m6 9 6 6 6-6"></path>
+    </svg>
+  </button>
+  <nav
+    class="language-switcher"
+    id="locale-panel"
+    aria-label={t(locale, "language")}
+  >
+    {
+      LOCALES.map((code) =>
+        code === locale ? (
+          <span
+            class="current-language"
+            lang={LOCALE_TAGS[code]}
+            title={LOCALE_NAMES[code]}
+            aria-current="page"
+          >
+            <span class="cell-label">{code.toUpperCase()}</span>
+          </span>
+        ) : (
+          <a
+            href={hrefs?.[code] ?? localizedPath(code)}
+            hreflang={LOCALE_TAGS[code]}
+            lang={LOCALE_TAGS[code]}
+            title={LOCALE_NAMES[code]}
+            data-language-link
+            data-astro-prefetch="hover"
+          >
+            <span class="cell-label">{code.toUpperCase()}</span>
+          </a>
+        ),
+      )
+    }
+  </nav>
+</div>
+
+<style>
+  /**
+   * Tres celdas octogonales.
+   *
+   * Elegir idioma sigue siendo una sola decisión, así que los tres enlaces se
+   * presentan como un solo objeto: las tres celdas se tocan por sus caras
+   * verticales y comparten pared, como el grupo segmentado que había antes.
+   *
+   * ## Por qué la forma la dibujan los pseudoelementos
+   *
+   * El octógono **no** se recorta sobre el propio enlace, y no es capricho: el
+   * orden de pintado aplica el `filter` y **después** el `clip-path`, así que un
+   * `drop-shadow` puesto en el mismo elemento que el recorte se recorta a sí
+   * mismo y no sale ni un píxel fuera de la silueta —medido: un halo rojo de
+   * 30 px no pintaba nada—. Con la forma en los pseudoelementos, el enlace queda
+   * sin recortar y puede llevar el halo, que se calcula sobre la silueta de sus
+   * hijos.
+   *
+   * `::before` es la pared y `::after` el relleno, 1 px por dentro: con
+   * `clip-path` no hay borde posible, así que el «borde» es la pared asomando.
+   */
+  .language-switcher {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  /* Ancla del panel en estrecho. En ancho no hace nada: el `<nav>` fluye dentro
+     como si el contenedor no estuviera. */
+  .locale-control {
+    display: inline-flex;
+    position: relative;
+  }
+
+  /* El botón no existe donde caben las tres celdas. */
+  .locale-trigger {
+    display: none;
+  }
+
+  .locale-caret {
+    margin-inline-start: 0.15rem;
+    opacity: 0.7;
+  }
+
+  /**
+   * El pliegue de estrecho.
+   *
+   * El panel es la **misma** tira de tres celdas, sacada del flujo y puesta bajo
+   * el botón dentro de una caja con el borde y el brillo de `.control-group`, que
+   * es la caja de los grupos de la barra. Nada de la maquinaria del octógono
+   * cambia: sólo dónde se dibuja.
+   *
+   * Alineado por la **izquierda** —`inset-inline-start: 0`—, y esto cambió.
+   *
+   * Iba anclado a la derecha porque la barra vive pegada a ese borde y un panel
+   * abriéndose hacia fuera se saldría de la pantalla. Valía mientras la fila era
+   * `[ES][⋯][tema]` y este botón quedaba a un dedo del canto derecho. Desde que
+   * las vistas caben en línea (`barFit.ts`), el disparador de idioma es el
+   * **primero por la izquierda** de seis controles: anclado por la derecha, el
+   * panel crecía 130 px hacia fuera de la pantalla y se comía la celda del
+   * idioma actual. Se veían dos de tres.
+   *
+   * Hacia la derecha siempre hay sitio, en los dos estados: el panel mide lo
+   * mismo que las tres celdas —130 px— y a su derecha quedan los otros cinco
+   * controles, que son más. Se abre por encima de ellos, que es lo que hace un
+   * desplegable.
+   *
+   * El panel de las vistas se queda anclado por la derecha, y no es una
+   * incoherencia: aquél vive pegado al canto derecho de la barra y allí el sitio
+   * está del otro lado. Cada uno se abre hacia donde lo hay.
+   *
+   * `visibility` además de `opacity`: sin ella el panel cerrado sigue siendo
+   * enfocable con el tabulador y se tabula a ciegas por tres enlaces invisibles.
+   */
+  @media (width <= 700px) {
+    .locale-trigger {
+      display: inline-flex;
+      gap: 0;
+      padding-inline: 0.5rem;
+    }
+
+    .language-switcher {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      box-shadow: var(--shadow-raised);
+      inset-block-start: calc(100% + 0.35rem);
+      inset-inline-start: 0;
+      opacity: 0;
+      padding: 0.25rem;
+      position: absolute;
+      transition:
+        opacity 160ms ease,
+        translate 160ms ease,
+        visibility 160ms;
+      translate: 0 -6px;
+      visibility: hidden;
+      z-index: 2;
+    }
+
+    .locale-control[data-menu-open] .language-switcher {
+      opacity: 1;
+      translate: 0 0;
+      visibility: visible;
+    }
+
+    .locale-control[data-menu-open] .locale-caret {
+      rotate: 180deg;
+    }
+  }
+
+  a,
+  .current-language {
+    align-items: center;
+    color: var(--text);
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 44px;
+    justify-content: center;
+    position: relative;
+    transition: filter 220ms ease;
+    /* Cuadrada: es lo que hace que el octógono sea regular. */
+    width: 44px;
+  }
+
+  /**
+   * Octógono **regular**: los ocho lados miden lo mismo, 18,23 px.
+   *
+   * Dos condiciones, y las dos importan. La caja tiene que ser cuadrada —con
+   * 40×44 la forma sale estirada y los lados iban de 16,00 a 17,84— y el corte
+   * de cada esquina cae en `1 − 1/√2` = 29,2893 %, no en el 30 % de tanteo: con
+   * 30 % en caja cuadrada seguían saliendo dos medidas, 17,60 y 18,67.
+   */
+  a::before,
+  a::after,
+  .current-language::before,
+  .current-language::after {
+    clip-path: polygon(
+      29.2893% 0%,
+      70.7107% 0%,
+      100% 29.2893%,
+      100% 70.7107%,
+      70.7107% 100%,
+      29.2893% 100%,
+      0% 70.7107%,
+      0% 29.2893%
+    );
+    content: "";
+    position: absolute;
+    transition:
+      background-color 160ms ease,
+      inset 160ms ease;
+  }
+
+  /* La pared. */
+  a::before,
+  .current-language::before {
+    background: var(--border);
+    inset: 0;
+  }
+
+  /* El relleno, 1 px por dentro: lo que sobresale de la pared es el borde. */
+  a::after,
+  .current-language::after {
+    background: var(--surface);
+    inset: 1px;
+  }
+
+  /* Los lados verticales del octógono son planos, así que las celdas se tocan
+     por ahí. Se solapan 1 px para que las dos paredes contiguas dibujen una
+     sola línea y no un filete doble. */
+  :is(a, .current-language) + :is(a, .current-language) {
+    margin-left: -1px;
+  }
+
+  /* El rótulo va por encima de la pared y del relleno; un nodo de texto suelto
+     no se puede apilar, de ahí el `<span>`.
+
+     El `z-index` es imprescindible, no decorativo: `::after` es el último hijo
+     del enlace, así que sin subir el rótulo el relleno se pinta encima y las
+     siglas desaparecen. */
+  .cell-label {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    position: relative;
+    z-index: 1;
+  }
+
+  /**
+   * La celda activa va encendida en acento, igual que el resto de estados
+   * activos del sitio: el conmutador de la vista abierta
+   * (`[aria-pressed="true"]`) y el segmento del índice lateral hacen lo mismo.
+   * Antes era la excepción —fondo gris— por no atar «tu idioma» al acento, que
+   * se sortea en cada carga; pero esa objeción vale igual para los otros dos, y
+   * ser el único estado activo apagado la hacía parecer deshabilitada.
+   *
+   * El rótulo va en `--text` —blanco en oscuro, casi negro en claro—, igual que
+   * el de los otros cinco controles: el estado lo marcan la pared encendida y el
+   * relleno, no el color de la letra. Un blanco literal no serviría: en claro
+   * `--accent-soft` es casi blanco y la letra desaparecería.
+   */
+  .current-language {
+    filter: var(--glow-hover-filter);
+    z-index: 1;
+  }
+
+  .current-language::before {
+    background: var(--accent);
+  }
+
+  .current-language::after {
+    background: var(--accent-soft);
+  }
+
+  @media (hover: hover) {
+    /* La receta de `.bar-control`: superficie neutra, filete vivo y halo. El
+       aro de acento que en `--glow-hover` dibuja el `spread` de 1 px aquí lo da
+       la pared, que **es** el borde de la celda. */
+    a:hover {
+      filter: var(--glow-hover-filter);
+      z-index: 2;
+    }
+
+    a:hover::before {
+      background: color-mix(in srgb, var(--accent) 60%, var(--border-hover));
+    }
+
+    a:hover::after {
+      background: var(--surface-hover);
+    }
+  }
+
+  /**
+   * El foco no puede salir por fuera: `clip-path` recorta también el `outline`,
+   * así que el anillo global de `:focus-visible` sería invisible. Se dibuja
+   * hacia dentro, engordando la pared.
+   *
+   * Va después del bloque de hover a propósito: los dos pintan la pared y tienen
+   * la misma especificidad, así que con el puntero encima de un enlace enfocado
+   * ganaba el hover y el anillo desaparecía.
+   */
+  a:focus-visible {
+    outline: none;
+    z-index: 2;
+  }
+
+  a:focus-visible::before {
+    background: var(--focus-ring);
+  }
+
+  a:focus-visible::after {
+    inset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    a,
+    .current-language,
+    a::before,
+    a::after,
+    .current-language::before,
+    .current-language::after,
+    .language-switcher,
+    .locale-caret {
+      transition: none;
+    }
+  }
+
+  @media print {
+    .locale-control {
+      display: none !important;
+    }
+  }
+</style>

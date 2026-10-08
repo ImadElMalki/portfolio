@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <!--
+      Punto y coma: el signo que cierra una sentencia sin terminar la idea.
+
+      En horizontal y no apilado. El signo tipográfico pone la coma debajo del
+      punto, pero a 16 px —que es el tamaño real de una pestaña— dos manchas en
+      vertical con la cola encima quedan a menos de 5 px de ancho cada una y se
+      leen como una raya. Una al lado de la otra reparten los 24 del lienzo y
+      cada pieza sale al doble de tamaño.
+
+      Va de relleno y no de trazo: un contorno de 1,5 px se lava contra el fondo
+      del navegador. Las esquinas van muy redondeadas —el sitio habla en
+      chaflán, pero un bisel de un píxel no existe a este tamaño—.
+
+      La coma son dos piezas del mismo color, no un contorno cerrado: la cabeza
+      es el mismo cuadrado redondeado que el punto y la cola un trazo con cabo
+      redondo que sale de ella. Fundidas se leen como una sola forma, y así la
+      cola se puede mover sin rehacer el contorno entero.
+    -->
+    <!--
+      El fondo sigue al esquema, y no es un adorno.
+
+      Este dibujo iba sobre transparente y sólo la tinta cambiaba con
+      `prefers-color-scheme`. Un navegador lo resuelve, pero un rasterizador de
+      terceros —el de un buscador, el de un lector de marcadores— no tiene por
+      qué: si resuelve «oscuro», pintaba tinta blanca sobre nada y el icono salía
+      en blanco. Con fondo explícito hay contraste resuelva lo que resuelva.
+
+      Un fondo fijo no valdría: con la tinta en blanco sobre un fondo claro se
+      pierde igual. Los dos valores son los `theme-color` que declara
+      `Layout.astro`, y el claro es exactamente el fondo sobre el que
+      `scripts/build-favicons.mjs` aplana el `.ico` y los dos PNG, así que el
+      dibujo rasterizado no cambia.
+    -->
+    <style>
+        .bg { fill: #f7f8f6; }
+        .ink { fill: #000; stroke: #000; }
+        @media (prefers-color-scheme: dark) {
+            .bg { fill: #0d100e; }
+            .ink { fill: #FFF; stroke: #FFF; }
+        }
+    </style>
+    <rect class="bg" width="24" height="24" />
+    <rect class="ink" x="1.9" y="5.4" width="7.2" height="7.2" rx="2.6" stroke="none" />
+    <rect class="ink" x="13.1" y="5.4" width="7.2" height="7.2" rx="2.6" stroke="none" />
+    <path
+        class="ink"
+        fill="none"
+        stroke-width="4.2"
+        stroke-linecap="round"
+        d="M18 10.9 15.1 18.9"
+    />
+</svg>

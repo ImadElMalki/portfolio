@@ -1,0 +1,3459 @@
+---
+import type { CvData, Locale } from "@/cv"
+import { Font } from "astro:assets"
+import ThemeManager from "@/components/ThemeManager.astro"
+import ThemeToggle from "@/components/ThemeToggle.astro"
+import SiteFooter from "@/components/SiteFooter.astro"
+import PdfButton from "@/components/PdfButton.astro"
+import LanguageSwitcher from "@/components/LanguageSwitcher.astro"
+import AskDock from "@/components/AskDock.astro"
+import UtilityBarRuntime from "@/components/UtilityBarRuntime.astro"
+/* La insignia de estado de proyecto: la usan la portada, el diálogo y la ficha.
+   Importada aquí viaja dentro de la hoja del layout, sin petición propia; desde
+   los dos componentes, Vite la sacaba a un trozo aparte y bloqueante. */
+import "@/styles/projectStatus.css"
+import { buildProfileJsonLd, serializeJsonLd } from "@/lib/jsonLd"
+import { portraitSources } from "@/lib/portraitImages"
+import { projectPagePath, type PublicPage } from "@/lib/publicPages"
+import {
+  localized,
+  localizedPath,
+  LOCALE_TAGS,
+  LOCALES,
+  OG_LOCALES,
+  t,
+} from "@/lib/i18n"
+
+interface Props {
+  cv: Readonly<CvData>
+  title: string
+  locale: Locale
+  /** Fuera del índice: la 404 no debe aparecer en los buscadores. */
+  noindex?: boolean
+  /** Solo si la página no habla del CV: por defecto va el `tagline`. */
+  description?: string
+  /**
+   * Esta misma página en cada idioma, para el conmutador y los `hreflang`. Por
+   * defecto es la portada, que es donde vive el portfolio; una página con slug
+   * propio por idioma —la landing de servicios— tiene que declararlo o el
+   * conmutador te echaría al inicio.
+   */
+  localeHrefs?: Record<Locale, string>
+  /** Marca la página independiente abierta en la navegación global. */
+  currentPage?: PublicPage
+  /**
+   * El `id` del proyecto, sólo en su ficha.
+   *
+   * Es lo que convierte el nodo de la página en una `ItemPage` con `mainEntity`
+   * al proyecto y con sus migas, en vez de una `WebPage` que no dice de qué
+   * trata. Ver `jsonLd.ts`.
+   */
+  projectId?: string
+}
+
+const {
+  cv,
+  title,
+  locale,
+  noindex = false,
+  description: pageDescription,
+  localeHrefs,
+  currentPage,
+  projectId,
+} = Astro.props
+
+const { basics } = cv
+const { name } = basics
+/**
+ * La descripción de los buscadores y de las tarjetas es `tagline`, no `summary`:
+ * el resumen del CV son ~380 caracteres y Google corta sobre 160, así que salía
+ * truncado en el resultado y en la vista previa de cada red.
+ */
+const description = pageDescription ?? localized(basics.tagline, locale)
+
+const localeHref = (code: Locale) => localeHrefs?.[code] ?? localizedPath(code)
+
+/**
+ * Una página fuera del índice no declara canonical, `hreflang` ni tarjeta: no
+ * es una dirección que nadie deba guardar ni compartir.
+ */
+const indexable = Boolean(Astro.site) && !noindex
+
+const canonicalUrl = indexable
+  ? new URL(Astro.url.pathname, Astro.site).toString()
+  : ""
+
+/* La portada es la única página indexable sin `currentPage` ni ficha. Es la
+   del perfil: `og:type=profile` y `dateModified` sólo valen para ella. */
+const isHome = indexable && !currentPage && !projectId
+/* Sólo la portada lleva retrato, pero las direcciones se calculan siempre: es
+   una lectura de la caché de Astro, y repartir el `await` por ramas complica la
+   plantilla sin ahorrar nada. Ver `portraitImages.ts`. */
+const portraits = await portraitSources()
+const [givenName = name, ...familyNameParts] = name.trim().split(/\s+/)
+
+/**
+ * Tarjeta 1200×630, compuesta durante el build por `ogCard.ts`.
+ *
+ * Cada ficha de proyecto tiene la suya, con el nombre del proyecto en el
+ * titular: hasta el 08-10-2026 las veinticuatro declaraban la de la portada, y
+ * un enlace a un proyecto compartido en LinkedIn enseñaba el retrato y el
+ * titular del portfolio sin decir de qué hablaba.
+ */
+const ogImage = indexable
+  ? new URL(
+      projectId
+        ? `${projectPagePath(projectId, locale)}og.jpg`
+        : localizedPath(locale, "/og.jpg"),
+      Astro.site,
+    ).toString()
+  : ""
+const ogImageAlt = `${t(locale, "portfolioOf")} ${name}`
+/* El canonical se le pasa en vez de que lo recomponga: si no, toda página
+   indexable declaraba ser la portada y contradecía su propio `<link
+   rel="canonical">`. Ver `SEO-02` en `AUDIT-2026-09-11.md`. */
+const jsonLd = Astro.site
+  ? buildProfileJsonLd(cv, Astro.site.toString(), locale, {
+      canonical: canonicalUrl,
+      title,
+      description,
+      ...(projectId ? { projectId } : {}),
+      ...(isHome && __HOME_CONTENT_DATE__
+        ? { dateModified: __HOME_CONTENT_DATE__ }
+        : {}),
+    })
+  : undefined
+
+/** La misma página en los otros idiomas, para `hreflang`. */
+const alternates = indexable
+  ? LOCALES.map((code) => ({
+      code,
+      href: new URL(localeHref(code), Astro.site).toString(),
+    }))
+  : []
+const defaultAlternate = alternates.find(({ code }) => code === "es")
+const initialBarSection =
+  Astro.url.pathname === localizedPath(locale) ? t(locale, "home") : ""
+---
+
+<!doctype html>
+<html lang={LOCALE_TAGS[locale]}>
+  <head>
+    <meta charset="UTF-8" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="author" content={name} />
+    <meta name="generator" content={Astro.generator} />
+    {noindex && <meta name="robots" content="noindex, follow" />}
+    {
+      /* Sin `max-image-preview:large` Google muestra una miniatura pequeña,
+         aunque la tarjeta OG sea de 1200×630. */
+      indexable && jsonLd && (
+        <meta
+          name="robots"
+          content="index, follow, max-image-preview:large, max-snippet:-1"
+        />
+      )
+    }
+    {
+      /**
+       * Cuatro declaraciones para un solo dibujo, y cada una tiene su cliente.
+       *
+       * El sitio declaraba **sólo** el SVG, que es lo correcto para un
+       * navegador y no basta para el resultado de búsqueda. Google tiene un
+       * rastreador de favicons aparte del que indexa, va a su ritmo y, cuando no
+       * resuelve lo declarado, cae a `/favicon.ico` — que aquí daba **404**, así
+       * que se quedaba con lo último que tenía en caché: el `</>` que dejó de
+       * ser el favicon el 23-08-2026.
+       *
+       * Y hay un segundo motivo para no dejarlo en el SVG: lleva dentro un
+       * `<style>` con `prefers-color-scheme`. Un navegador lo resuelve; un
+       * rasterizador de terceros no tiene por qué. El PNG es plano y no depende
+       * de eso.
+       *
+       * El orden es el de siempre y no importa mucho: quien entiende SVG lo
+       * prefiere por tipo, no por posición. Los tres archivos rasterizados los
+       * genera `npm run favicons` a partir del propio SVG, y se versionan como
+       * el PDF del CV.
+       */
+    }
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/icon-96.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link
+      rel="alternate"
+      type="text/markdown"
+      href={localizedPath(locale, "/cv.md")}
+      title={t(locale, "markdownAlternate")}
+    />
+    <link
+      rel="alternate"
+      type="application/json"
+      href={localizedPath(locale, "/cv.json")}
+      title={t(locale, "jsonAlternate")}
+    />
+    <link
+      rel="alternate"
+      type="text/plain"
+      href={localizedPath(locale, "/llms.txt")}
+      title={t(locale, "llmsMachineVersions")}
+    />
+    {
+      alternates.map(({ code, href }) => (
+        <link rel="alternate" hreflang={LOCALE_TAGS[code]} href={href} />
+      ))
+    }
+    {
+      defaultAlternate && (
+        <link
+          rel="alternate"
+          hreflang="x-default"
+          href={defaultAlternate.href}
+        />
+      )
+    }
+    <meta
+      name="theme-color"
+      content="#f7f8f6"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#0d100e"
+      media="(prefers-color-scheme: dark)"
+    />
+    {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+
+    {
+      /**
+       * El retrato de la portada, pedido con el documento.
+       *
+       * Es el elemento LCP de `/`, y hasta el 08-10-2026 no se descubría hasta
+       * que el navegador llegaba al hero: 123 ms de `resourceLoadDelay` sobre
+       * 2 093 de LCP en la CI, con `fetchpriority="high"` ya puesto —que ordena
+       * la cola, pero no adelanta el descubrimiento—.
+       *
+       * Dos enlaces y no uno, con el mismo `media` que los `<source>`: el
+       * retrato tiene variante clara y oscura, y una precarga sin `media`
+       * traería la que no se va a pintar. `type="image/avif"` deja fuera a quien
+       * no lo lea, que seguirá por el WebP del `<picture>` como hasta ahora.
+       *
+       * Quien se haya forzado un tema distinto al del sistema precarga el que no
+       * es —aquí no se puede saber, eso lo decide un guion con `localStorage`
+       * antes del primer pintado—. Son 21 KiB de más para esa minoría, a cambio
+       * de adelantar el LCP de todos los demás.
+       *
+       * Sin `imagesizes`: el `srcset` va por densidades, no por anchos.
+       */
+    }
+    {
+      isHome && (
+        <>
+          <link
+            rel="preload"
+            as="image"
+            type="image/avif"
+            imagesrcset={portraits.lightAvif}
+            media="(prefers-color-scheme: light)"
+            fetchpriority="high"
+          />
+          <link
+            rel="preload"
+            as="image"
+            type="image/avif"
+            imagesrcset={portraits.darkAvif}
+            media="(prefers-color-scheme: dark)"
+            fetchpriority="high"
+          />
+        </>
+      )
+    }
+
+    {
+      /**
+       * Casi ninguna va con `preload`, y es una consecuencia de servir pesos
+       * estáticos: `preload` marca **todas** las caras de la familia, así que
+       * Inter metía sus cinco archivos en el camino crítico para que el primer
+       * pintado use uno. Con el CSS incrustado en el `<head>` el navegador ya
+       * conoce cada `@font-face` al parsear la página, y `display: swap` cubre
+       * el resto.
+       *
+       * **Space Grotesk sí**, y el razonamiento de arriba es justo el motivo: no
+       * tiene cinco caras, tiene **una** —12,8 KB— y es la del `h1`. Sin
+       * `preload` su descarga no arranca hasta que el navegador termina de
+       * analizar la hoja incrustada y encuentra quién la usa; con él sale a la
+       * vez que el documento. El argumento contra Inter no le aplica porque no
+       * hay caras de más que arrastrar.
+       *
+       * Desde el 01-10-2026 Inter tampoco tiene cinco caras en pantalla: es un
+       * solo archivo variable (`--font-inter-variable`, ver `astro.config.mjs`),
+       * y lo mismo la mono; los sueltos quedan para imprimir. Siguen sin
+       * `preload` porque adelantarlas compite con el retrato en los primeros
+       * viajes; eso está por medir.
+       */
+    }
+    <Font cssVariable="--font-inter-variable" />
+    <Font cssVariable="--font-inter" />
+    <Font cssVariable="--font-jetbrains-mono-variable" />
+    <Font cssVariable="--font-jetbrains-mono" />
+    <Font cssVariable="--font-space-grotesk" preload />
+    <Font cssVariable="--font-doto" />
+
+    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    <meta property="og:type" content={isHome ? "profile" : "website"} />
+    {
+      isHome && (
+        <>
+          <meta property="profile:first_name" content={givenName} />
+          <meta
+            property="profile:last_name"
+            content={familyNameParts.join(" ")}
+          />
+        </>
+      )
+    }
+    <meta property="og:locale" content={OG_LOCALES[locale]} />
+    {
+      LOCALES.filter((code) => code !== locale).map((code) => (
+        <meta property="og:locale:alternate" content={OG_LOCALES[code]} />
+      ))
+    }
+    <meta property="og:site_name" content={name} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {
+      ogImage && (
+        <>
+          <meta property="og:image" content={ogImage} />
+          <meta property="og:image:type" content="image/jpeg" />
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+          <meta property="og:image:alt" content={ogImageAlt} />
+        </>
+      )
+    }
+
+    {
+      /* Las etiquetas de X van con `name`, no con `property`: `property` es de
+         Open Graph. `twitter:domain` no existe en la especificación y lo que
+         mostraba ya sale de `og:url`. */
+    }
+    <meta name="twitter:card" content="summary_large_image" />
+    {canonicalUrl && <meta name="twitter:url" content={canonicalUrl} />}
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {
+      ogImage && (
+        <>
+          <meta name="twitter:image" content={ogImage} />
+          <meta name="twitter:image:alt" content={ogImageAlt} />
+        </>
+      )
+    }
+
+    {
+      indexable && (
+        <script
+          type="application/ld+json"
+          is:inline
+          set:html={serializeJsonLd(jsonLd)}
+        />
+      )
+    }
+
+    {
+      /**
+       * Acento al azar en cada visita, evitando repetir el de la anterior. Se
+       * decide antes del primer pintado para que no haya cambio de color a la
+       * vista.
+       *
+       * - Una visita es una pestaña: el acento sorteado se guarda en
+       *   `sessionStorage` y las páginas siguientes lo leen. Desde el
+       *   02-10-2026 cada navegación es una carga nueva —sin `<ClientRouter />`
+       *   que conserve el documento—, y volver a sortear en cada una pintaría
+       *   la página de otro color al cambiar de idioma.
+       * - El guion puede reevaluarse en desarrollo, pero el acento sólo se
+       *   decide una vez durante la vida del documento.
+       * - Cada nombre necesita su bloque `:root[data-accent="…"]` en el CSS de
+       *   más abajo. `contrast.test.ts` comprueba que las dos listas coinciden y
+       *   que ninguna paleta baja del 4.5:1 de la WCAG AA.
+       * - Con el almacenamiento bloqueado el acento sigue siendo aleatorio: no
+       *   hace falta persistencia para aplicar el color en esta carga.
+       *
+       * Éste y los comentarios de los guiones de abajo se quedan fuera de
+       * ellos: un `is:inline` no se minifica y viajaba entero a cada una de las
+       * 42 páginas. Eran 5,4 de sus 11,2 KB (PERF-07).
+       */
+    }
+    <script is:inline>
+      ;(() => {
+        const root = document.documentElement
+        if (root.dataset.accent) return
+
+        const accents = [
+          "ocean",
+          "cyan",
+          "teal",
+          "indigo",
+          "violet",
+          "amber",
+          "rose",
+          "emerald",
+          "copper",
+          "steel",
+          "nothing",
+        ]
+        const storageKey = "portfolio-accent"
+        const sessionKey = "portfolio-accent-tab"
+        let tabAccent = null
+        let previousAccent = null
+
+        try {
+          tabAccent = window.sessionStorage.getItem(sessionKey)
+          previousAccent = window.localStorage.getItem(storageKey)
+        } catch {}
+
+        if (accents.includes(tabAccent)) {
+          root.dataset.accent = tabAccent
+          return
+        }
+
+        const availableAccents = accents.filter(
+          (accent) => accent !== previousAccent,
+        )
+        const accent =
+          availableAccents[Math.floor(Math.random() * availableAccents.length)]
+
+        root.dataset.accent = accent
+
+        try {
+          window.localStorage.setItem(storageKey, accent)
+          window.sessionStorage.setItem(sessionKey, accent)
+        } catch {}
+      })()
+    </script>
+    {
+      /**
+       * El visor del retrato, una vez enfocado, se queda enfocado —en esta
+       * pestaña.
+       *
+       * Va antes del primer pintado, como el acento y el tema: si el enlace a
+       * «Sobre mí» apareciera después, quien ya lo descubrió vería la portada
+       * dar un salto en cada recarga. Los comentarios se quedan aquí fuera
+       * porque un `is:inline` no se minifica y viaja entero a las doce páginas.
+       *
+       * **`sessionStorage` y no `localStorage`**, al contrario que el acento, el
+       * tema y la secuencia de arranque: el hallazgo dura lo que la pestaña y se
+       * vuelve a ganar en la visita siguiente. Ver `portraitFocus.ts`, donde
+       * está escrito el porqué.
+       *
+       * Estar *en* la página cuenta como haberla encontrado: quien llega desde
+       * un buscador no ha tocado el retrato, y sin esto volvería a la portada
+       * sin ninguna manera de regresar. Con el almacenamiento bloqueado el
+       * hallazgo dura lo que la página, que es mejor que no dejar entrar.
+       */
+    }
+    <script is:inline define:vars={{ isAboutPage: currentPage === "about" }}>
+      ;(() => {
+        const key = "portfolio-about"
+        let found = isAboutPage
+
+        try {
+          if (isAboutPage) window.sessionStorage.setItem(key, "1")
+          found = window.sessionStorage.getItem(key) === "1"
+        } catch {}
+
+        if (found) document.documentElement.dataset.aboutFound = ""
+      })()
+    </script>
+    {
+      /**
+       * La secuencia de arranque, y por qué se decide aquí.
+       *
+       * El aparato se enciende una vez: la primera visita ve el rótulo escribir
+       * `SYS.OK · ACCENT … · LOCALE …` durante 400 ms, y quien vuelve entra
+       * directo. Si la decisión se tomara en el runtime, el rótulo de arranque
+       * saldría pintado un fotograma antes de que el guion lo retirase, o sea
+       * un parpadeo en cada carga para todo el mundo menos para la primera.
+       * Con el almacenamiento bloqueado arranca cada vez: son 400 ms.
+       *
+       * Los comentarios se quedan aquí fuera: un `is:inline` no se minifica y
+       * viaja entero a cada página.
+       */
+    }
+    <script is:inline>
+      ;(() => {
+        const key = "portfolio-booted"
+
+        try {
+          if (window.localStorage.getItem(key)) return
+          window.localStorage.setItem(key, "1")
+        } catch {}
+
+        document.documentElement.dataset.booting = ""
+      })()
+    </script>
+    <ThemeManager defaultTheme="auto" />
+    {
+      /**
+       * `data-js` dice antes del primer pintado que hay JavaScript, para lo que
+       * sólo existe con él —la píldora del asistente, ver `AskDock.astro`—. Lo
+       * decía `data-view`, que se fue con las vistas el 06-10-2026.
+       *
+       * Y la procedencia, por lo mismo y en el mismo sitio. Quien llega
+       * a `/servicios/` desde nineproject.es lo trae en `?from=nineproject`, y
+       * eso decide cuál de los dos regresos se pinta —ver `ServicesLanding`—.
+       * Este sitio es de salida estática: en el build no hay petición y el
+       * parámetro no existe, así que la decisión sólo se puede tomar aquí.
+       *
+       * Va dentro de este guion y no en uno propio en la página porque la CSP
+       * declara hashes y Astro no calcula el de ningún `is:inline`. Los de este
+       * `<head>` corren porque van delante del `<meta>` de la política, que
+       * Astro pone al final de la cabecera y que no se aplica a lo que lo
+       * precede; uno en el cuerpo queda detrás y el navegador lo bloquea. Se
+       * comprobó, y quedó bloqueado. Desde el 07-10-2026 lo caza
+       * `check-build.mjs`.
+       *
+       * ## El retrato del hero, cuando el tema está forzado
+       *
+       * El `<picture>` de `Hero.astro` elige con `media="(prefers-color-scheme:
+       * dark)"` porque es lo único que el *preload scanner* sabe leer, y por eso
+       * la portada descarga **una** imagen y no las dos —ver `PERF-04` en
+       * `AUDIT-2026-09-11.md`—. Lo que ese `media` no sabe es que aquí el tema
+       * también se fija a mano, y quien lo forzó al contrario del suyo del
+       * sistema vería el retrato equivocado. `ThemeManager` ya dejó
+       * `data-theme` en `<html>` unas líneas más arriba: se compara con la
+       * preferencia del sistema y, si no coinciden, el `media` pasa a ser una
+       * constante —`all` fuerza el oscuro, `not all` lo desactiva y gana el
+       * `<img>` claro—.
+       *
+       * **Por qué con un observador y no leyendo el elemento aquí mismo.** Esto
+       * corre en el `<head>` y el `<picture>` todavía no existe. Y tiene que ser
+       * en el `<head>`, delante del `<meta>` de la CSP —ver arriba—: uno en
+       * línea detrás del `<slot />` —o dentro de `Hero.astro`— queda bajo una
+       * política que no lleva su hash, y el navegador lo bloquea. Se comprobó
+       * las dos veces, y las dos quedó bloqueado. El observador se desconecta
+       * en cuanto lo encuentra, que es
+       * mientras el analizador sigue en el hero y muy antes del primer pintado;
+       * y en `DOMContentLoaded` en todo caso, porque el retrato no está en todas
+       * las páginas y sin ese corte seguiría mirando cada inserción para
+       * siempre.
+       *
+       * Desde el 01-10-2026 las fuentes oscuras son dos, AVIF y WebP. Cada una
+       * se corrige en cuanto aparece, antes de que llegue el `<img>` y se elija
+       * imagen, y el observador no se suelta hasta ver el `<img>`: va detrás de
+       * todas, así que cuando existe ya no queda ninguna por llegar.
+       *
+       * Los cambios posteriores —el conmutador— son de `portraitTheme.ts`.
+       *
+       * ## Y la llegada desde un cambio de idioma
+       *
+       * El conmutador de idioma deja en `sessionStorage` adónde va y cuándo
+       * (`UtilityBarRuntime.astro`). Aquí se recoge antes del primer pintado:
+       * `data-signal` acota el fogonazo de la capa vieja en la transición entre
+       * documentos y se quita cuando acaba —o al segundo y medio si el
+       * navegador no hace transición—, y `data-arrival` se queda para que la
+       * tira Glyph acuse el cambio aunque su guion llegue después. El destino y
+       * los diez segundos son para que una marca olvidada no se aplique a otra
+       * navegación.
+       */
+    }
+    <script is:inline>
+      ;(() => {
+        const root = document.documentElement
+        let arrival = null
+
+        try {
+          arrival = JSON.parse(
+            window.sessionStorage.getItem("portfolio-signal") ?? "null",
+          )
+          window.sessionStorage.removeItem("portfolio-signal")
+        } catch {}
+
+        if (
+          !arrival ||
+          arrival.to !== window.location.pathname ||
+          Date.now() - arrival.at > 10000
+        ) {
+          return
+        }
+
+        root.dataset.signal = "locale"
+        root.dataset.arrival = "locale"
+
+        const clear = () => {
+          delete root.dataset.signal
+        }
+        window.addEventListener(
+          "pagereveal",
+          (event) => {
+            if (event.viewTransition)
+              event.viewTransition.finished.finally(clear)
+            else clear()
+          },
+          { once: true },
+        )
+        window.setTimeout(clear, 1500)
+      })()
+
+      ;(() => {
+        const root = document.documentElement
+        root.dataset.js = ""
+        const params = new URLSearchParams(window.location.search)
+        if (params.get("from") === "nineproject") {
+          root.dataset.from = "nineproject"
+        }
+      })()
+
+      ;(() => {
+        const fix = () => {
+          const sources = document.querySelectorAll("[data-portrait-source]")
+          if (sources.length === 0) return false
+
+          const forced = document.documentElement.dataset.theme
+          const system = window.matchMedia("(prefers-color-scheme: dark)")
+            .matches
+            ? "dark"
+            : "light"
+
+          if (forced && forced !== system) {
+            const media = forced === "dark" ? "all" : "not all"
+            for (const source of sources) {
+              if (source.media !== media) source.media = media
+            }
+          }
+          return document.querySelector(".portrait-image") !== null
+        }
+
+        if (fix()) return
+
+        const observer = new MutationObserver(() => {
+          if (fix()) observer.disconnect()
+        })
+        observer.observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+        })
+        document.addEventListener("DOMContentLoaded", () =>
+          observer.disconnect(),
+        )
+      })()
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">{t(locale, "skipToContent")}</a>
+    {
+      /**
+       * «Esto también está en tu idioma.»
+       *
+       * El sitio publica tres idiomas y no detectaba ninguno: quien entra por la
+       * raíz con el navegador en inglés recibe castellano y no tiene forma de
+       * saber que existe su versión, salvo que encuentre el conmutador de la
+       * barra —que en móvil vive plegado tras un botón—.
+       *
+       * ## Un aviso, no una redirección
+       *
+       * Redirigir por `Accept-Language` es lo que primero se piensa y es peor por
+       * dos motivos. Google entra siempre con el suyo, así que una redirección
+       * dura le esconde los otros dos idiomas —lo desaconseja explícitamente—; y
+       * el sitio es estático, de modo que decidir en servidor exigiría una
+       * Function en la raíz y renunciar al cacheado de borde de Pages.
+       *
+       * ## Por qué flota abajo a la izquierda
+       *
+       * Porque una franja arriba tendría que revelarse **después** de que corra
+       * el guion, y eso desplaza la página entera: es *layout shift*, y lo mide
+       * `tests/browser/performance.spec.ts`. Flotando no mueve nada. La esquina
+       * derecha la ocupa `AskDock`, así que va a la contraria con su misma receta
+       * de `env(safe-area-inset-*)`.
+       *
+       * ## Los tres idiomas van en `data-*`
+       *
+       * Y aquí no es la convención del proyecto, es obligatorio: el aviso tiene
+       * que estar escrito en el idioma **que sugiere**, no en el de la página, y
+       * cuál sea eso no se sabe hasta que el navegador lo dice. Ver
+       * `localeHintBody` en `ui.ts`.
+       *
+       * `localeHref` es el mismo que alimenta el `hreflang`, así que el enlace
+       * lleva a la *misma* página traducida y no a la portada: desde
+       * `/servicios/` va a `/en/services/`.
+       *
+       * `data-language-link` no es decorativo. Con él, el cableado que ya existe
+       * en `UtilityBarRuntime` enciende la tira Glyph al cambiar de idioma; sin
+       * él habría que duplicarlo.
+       */
+    }
+    <aside
+      class="locale-hint no-print"
+      data-locale-hint
+      data-locale={locale}
+      data-dismiss-label={t(locale, "localeHintDismiss")}
+      data-hints={JSON.stringify(
+        Object.fromEntries(
+          LOCALES.map((code) => [
+            code,
+            {
+              body: t(code, "localeHintBody"),
+              action: t(code, "localeHintAction"),
+              href: localeHref(code),
+              tag: LOCALE_TAGS[code],
+            },
+          ]),
+        ),
+      )}
+      hidden
+    >
+      <p class="locale-hint__body" data-locale-hint-body></p>
+      <a
+        class="locale-hint__action"
+        data-locale-hint-action
+        data-language-link
+        href="/"></a>
+      <button
+        class="locale-hint__dismiss"
+        type="button"
+        data-locale-hint-dismiss
+        aria-label={t(locale, "localeHintDismiss")}
+        title={t(locale, "localeHintDismiss")}
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
+          <path d="M6 6l12 12M18 6L6 18"></path>
+        </svg>
+      </button>
+    </aside>
+    {
+      /* Sin directivas `transition:*`. Sólo funcionan con `<ClientRouter />`,
+         que el sitio dejó el 02-10-2026, y además hacían que Astro emitiera un
+         <style> *después* de calcular los hash de la CSP, que el navegador
+         bloqueaba.
+
+         La navegación se queda con el fundido nativo de
+         `::view-transition-*(root)` entre documentos (`@view-transition`, más
+         abajo), que no necesita ni JS ni CSS inyectado. */
+    }
+    <header class="utility-bar no-print" data-utility-bar>
+      <div class="utility-bar__content">
+        <span class="bar-readout label-mono no-print">
+          {
+            /* La matrícula del aparato. Texto y nada más: aquí hubo una firma
+               que se descifraba al pasar por encima y llevaba a «Sobre mí», y
+               se ha ido entera —el secreto vive ahora en el retrato del hero,
+               ver `Hero.astro`—. Un rótulo que reacciona al puntero promete una
+               función, y éste no tiene ninguna. */
+          }
+          <span class="bar-callsign">IEM</span>
+          {
+            /* La secuencia de arranque, sólo la primera visita. Ocupa el sitio
+               del rótulo durante 400 ms; el CSS los intercambia con
+               `:root[data-booting]`, que pone un guion en línea del `<head>`
+               antes del primer pintado. */
+          }
+          <span class="bar-boot" data-bar-boot aria-hidden="true"></span>
+          <span class="bar-readout__meta" data-bar-meta>
+            <span aria-hidden="true">· PORTFOLIO</span>
+            <span
+              class="bar-readout__section"
+              data-bar-section
+              aria-hidden="true">{initialBarSection}</span
+            >
+            {
+              /* El contador lo escribe `SectionNav`, que ya sabe qué sección se
+                 está mirando. Sale vacío del build y se queda vacío en el hero,
+                 en contacto y fuera de la vista web. */
+            }
+            <span class="bar-count" data-bar-count aria-hidden="true"></span>
+            {
+              /**
+               * La hora, y el interruptor de la tira Glyph.
+               *
+               * Las seis cifras van dentro de un `aria-hidden`: cambian cada
+               * segundo y anunciarlas convertiría la barra en una región viva
+               * ruidosa. El `aria-hidden` **no puede subir al contenedor**, que
+               * es donde estaba: un botón enfocable dentro de un subárbol
+               * oculto es la infracción `aria-hidden-focus` que axe caza en
+               * `accessibility.spec.ts`. Por eso lo llevan los rótulos uno a
+               * uno y el botón se nombra con su propia etiqueta.
+               *
+               * `data-bar-clock` se queda en el `<span>` y no en el botón:
+               * es donde `UtilityBarRuntime` escribe el texto, y lo que congela
+               * la referencia visual del readout.
+               */
+            }
+            <button
+              class="bar-clock"
+              type="button"
+              data-glyph-easter
+              aria-labelledby="bar-clock-time bar-glyph-action"
+              title={t(locale, "glyphShow")}
+            >
+              <span id="bar-clock-time" data-bar-clock>--:--:--</span>
+              <span id="bar-glyph-action" class="sr-only">
+                {t(locale, "glyphShow")}
+              </span>
+            </button>
+          </span>
+        </span>
+        {
+          /**
+           * Dos grupos, no uno.
+           *
+           * El idioma no es una preferencia de vista: cambia el documento, no
+           * cómo se mira. Compartían caja y se leían como la misma fila de
+           * celdas; separados por su propio hueco, la barra dice lo que hay:
+           * a la izquierda con qué idioma, a la derecha con qué aspecto.
+           *
+           * El `id` y el `data-utility-controls` se quedan en el envoltorio y
+           * no en un grupo: son la caja entera de preferencias, y quien la
+           * busque desde fuera —una prueba, un guion— tiene un solo asidero.
+           *
+           * El envoltorio no lleva `role="group"`: el conmutador de idioma trae
+           * su propio `<nav aria-label>` y el de vista se nombra él solo.
+           */
+        }
+        <div
+          class="control-groups"
+          id="view-preferences-controls"
+          data-utility-controls
+        >
+          <div class="control-group control-group--locale">
+            <LanguageSwitcher locale={locale} hrefs={localeHrefs} />
+          </div>
+          <div
+            class="control-group control-group--view"
+            role="group"
+            aria-label={t(locale, "viewPreferences")}
+          >
+            {
+              /* El CV, en todas las páginas: quien llega a una ficha o a «Sobre
+                 mí» por un buscador también puede querer llevárselo. Hasta el
+                 06-10-2026 vivía tras un «⋯» con las vistas Markdown, rápida y
+                 consola, y sólo en la portada. */
+            }
+            <PdfButton locale={locale} />
+            {/* El que decide cómo se ve la página va el último. */}
+            <ThemeToggle locale={locale} />
+          </div>
+        </div>
+        {
+          /* Aquí vivía el expansor: un chevrón que devolvía los controles
+             cuando la barra se plegaba al bajar. La barra ya no se pega arriba
+             —`position: static`—, así que no se pliega, no hay nada que
+             devolver y el botón se ha ido con su guion (`utilityBar.ts`). */
+        }
+      </div>
+      {
+        /* La tira Glyph: catorce bloques en el canto superior de la ventana que
+           se encienden con el scroll. No lleva rol ni etiqueta —es un adorno
+           que duplica lo que ya dicen la barra de desplazamiento del navegador
+           y el índice lateral—, y por eso va `aria-hidden`.
+
+           Fuera de `__content` y no dentro: ahí se apoyaba en el canto inferior
+           de la barra, o sea a 63 px del borde, justo encima del subtítulo del
+           hero, y una raya horizontal cruzando una línea de texto se lee como
+           un tachado. Pegada al borde de la ventana no cruza nada. */
+      }
+      <span class="glyph-bar" aria-hidden="true"></span>
+    </header>
+    {
+      /* El asistente, en todas las páginas y no sólo en la portada: quien
+         aprende a preguntar en el portfolio lo intenta en «Sobre mí». Aquí sale
+         únicamente la píldora que lo abre; el panel lo construye `askDock.ts`
+         al pulsarla, porque emitirlo serían ~15 elementos por página que casi
+         nadie llega a ver.
+
+         También en la 404: hasta el 06-10-2026 allí iba la consola, con su
+         `ask`, y una píldora encima eran dos puertas a lo mismo. Sin consola,
+         quien llega a una dirección rota puede preguntar por lo que buscaba. */
+    }
+    <AskDock locale={locale} />
+    <UtilityBarRuntime />
+    <slot />
+    <SiteFooter locale={locale} name={name} />
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --accent-name: "OCEAN";
+    --accent-light: #245f91;
+    --accent-light-strong: #184a73;
+    --accent-light-soft: #e2edf6;
+    --focus-ring-light: #256b9f;
+    --accent-dark: #78b9e6;
+    --accent-dark-strong: #abd5f2;
+    --accent-dark-soft: #183044;
+    --focus-ring-dark: #78b9e6;
+
+    /* Una sola declaración por token: `light-dark()` elige según el
+       `color-scheme` que fija ThemeManager (o el del sistema si no hay JS). */
+    --bg: light-dark(#f7f8f6, #0d100e);
+    --surface: light-dark(#ffffff, #151a17);
+    --surface-raised: light-dark(#ffffff, #191f1b);
+    --surface-hover: light-dark(#eef2ee, #202822);
+    --surface-active: light-dark(#e5ebe6, #2a342d);
+    --text: light-dark(#141715, #eef3ef);
+    --text-muted: light-dark(#5f6962, #a6b0a9);
+    --text-subtle: light-dark(#3e4841, #c6cec8);
+    --text-faint: light-dark(#69756d, #8c9990);
+    --text-link: light-dark(#344139, #d8e1da);
+    --border: light-dark(#dbe2dc, #2b342e);
+    --border-hover: light-dark(#b8c5bc, #465448);
+    /* Contorno de un **control**, que la WCAG 2.2 mide aparte del texto: el
+       criterio 1.4.11 pide 3:1 contra lo que tiene al lado. Ni `--border` ni
+       `--border-hover` llegan —en oscuro dan 1,49:1 y 2,39:1 contra `--bg`, y
+       el relleno del campo apenas se despega del fondo (1,09:1)—, así que los
+       campos del formulario de contacto usan éste.
+       Medido contra `--bg` y contra `--surface`: 3.60/3.84 en claro y
+       3.98/3.66 en oscuro. Lo vigila `contrast.test.ts`. */
+    --border-control: light-dark(#79857e, #66766a);
+    --accent: light-dark(var(--accent-light), var(--accent-dark));
+    --accent-strong: light-dark(
+      var(--accent-light-strong),
+      var(--accent-dark-strong)
+    );
+    --accent-soft: light-dark(
+      var(--accent-light-soft),
+      var(--accent-dark-soft)
+    );
+    /* Tinte de acento para los estados suaves: el fondo suave de la paleta con
+       el tono fuerte como texto, la misma pareja que usan los chips de año.
+       Los dos resuelven el tema por su cuenta, así que acompañan a la paleta
+       sorteada en vez de imponer un azul fijo. */
+    --action-bg: var(--accent-soft);
+    --action-border: color-mix(in srgb, var(--accent) 38%, transparent);
+    --action-text: var(--accent-strong);
+    /* Relleno sólido con texto blanco, para el CTA en hover y el botón de cerrar
+       del diálogo. El relleno tiene que ser oscuro en los dos temas: blanco sobre
+       `--accent-dark` (un azul claro) se queda en 2:1. En claro rellena el tono
+       fuerte y en oscuro el suave, que es justo el extremo oscuro de la paleta,
+       así que el blanco pasa AA de sobra en las diez. Lo comprueba
+       `contrast.test.ts`. */
+    --action-fill: light-dark(
+      var(--accent-light-strong),
+      var(--accent-dark-soft)
+    );
+    --action-fill-text: #ffffff;
+    /* El CTA se comporta distinto según el tema, y no por capricho: sobre la
+       tarjeta blanca del modo claro el relleno sólido chillaba, así que ahí va un
+       tinte translúcido con el texto en el tono fuerte; sobre el fondo oscuro ese
+       mismo tinte no se leería como un botón, así que rellena y el texto va
+       blanco. `light-dark()` admite `color-mix()` porque devuelve un color. */
+    --cta-fill: light-dark(
+      color-mix(in srgb, var(--accent-light) 14%, transparent),
+      var(--accent-dark-soft)
+    );
+    --cta-text: light-dark(var(--accent-light-strong), #ffffff);
+    /* Relleno del botón de contratación —el CTA del hero y el de reserva de la
+       landing—, que es el único que debe gritar. En claro coincide con
+       `--action-fill`; en oscuro no puede usarlo, porque `--accent-dark-soft` es
+       casi el color de la tarjeta y el botón principal se leía como una caja
+       apagada en el móvil. Ahí rellena el acento claro con el fondo como texto:
+       el mismo par que usa la 404 y que `contrast.test.ts` ya valida contra
+       `--bg` en las diez paletas. */
+    --hire-fill: light-dark(var(--accent-light-strong), var(--accent));
+    --hire-text: light-dark(#ffffff, var(--bg));
+    /* Neón para el hover de los controles, en tres capas: filete de 1 px que
+       dibuja el contorno encendido, brillo corto pegado al borde y floración
+       ancha que lo separa del fondo. Vive aquí y no en cada componente porque el
+       CSS va incrustado en las tres páginas y el presupuesto de HTML del build va
+       contado.
+
+       Las proporciones son las que hacen que se vea: con el 22 % del filete y un
+       radio negativo en el halo el efecto existía pero no se notaba. */
+    --glow-hover:
+      0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent),
+      0 0 12px -1px color-mix(in srgb, var(--accent) 62%, transparent),
+      0 0 26px 2px color-mix(in srgb, var(--accent) 30%, transparent);
+    /* El mismo halo para lo que va recortado con `clip-path` —las celdas
+       octogonales del idioma—, que se come el `box-shadow` entero junto con la
+       forma. `drop-shadow` sí sigue la silueta recortada.
+
+       No es la receta de arriba traducida: `drop-shadow` no admite `spread`, así
+       que el filete de 1 px del original se imita con una primera capa de radio
+       muy corto; los radios y las opacidades de floración son los mismos.
+
+       Ojo con retocar estos números «porque el halo se ve flojo»: si un elemento
+       lleva `clip-path`, el recorte se aplica **después** del filtro y se come su
+       propio `drop-shadow`. En ese caso el halo no se arregla subiendo el alfa
+       —da igual lo que se ponga—, sino sacando el recorte del elemento que lleva
+       el filtro. Ver `LanguageSwitcher`. */
+    --glow-hover-filter: drop-shadow(
+        0 0 1px color-mix(in srgb, var(--accent) 60%, transparent)
+      )
+      drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 62%, transparent))
+      drop-shadow(0 0 26px color-mix(in srgb, var(--accent) 30%, transparent));
+    /* El mismo encendido para la tinta: `text-shadow` en las etiquetas y
+       `drop-shadow` en los iconos, que son trazos y no cajas. Al 65 % el halo
+       engordaba la letra y la dejaba emborronada a tamaño 0,72 rem. */
+    --glow-ink: color-mix(in srgb, var(--accent) 40%, transparent);
+    --scrollbar-track: color-mix(in srgb, var(--text-faint) 14%, transparent);
+    --scrollbar-thumb: color-mix(in srgb, var(--text-faint) 58%, transparent);
+    --warning: light-dark(#c07a00, #e0a83c);
+    /**
+     * El ámbar del titular del hero, y sólo de él.
+     *
+     * No reutiliza `--warning` aunque sea el mismo color de familia: `--warning`
+     * es una marca de aviso —el `--err` de la consola, el desdoble de
+     * `signal-ghost-loop`— y en claro vale **3,27:1** sobre el fondo. Para una
+     * marca basta; el titular es texto corrido y le aplica el 4,5:1 de la
+     * WCAG AA 1.4.3.
+     *
+     * De ahí que el tono claro sea un ocre y no un amarillo: un amarillo de
+     * verdad es demasiado luminoso para separarse 4,5:1 de un fondo casi blanco,
+     * y no hay forma de saltarse eso. #8a5a00 da 5,56:1 y sigue leyéndose
+     * amarillento. En oscuro no hay problema y se queda el ámbar de siempre,
+     * con 8,96:1.
+     *
+     * Fuera del acento a propósito: el acento se sortea en cada carga y esto
+     * tiene que ser el mismo color siempre.
+     */
+    --headline-ink: light-dark(#8a5a00, #e0a83c);
+    /* Estado del proyecto: el color lo lleva solo la insignia —en la tarjeta y
+       en su diálogo—, no los chips de tecnología ni el borde de la tarjeta.
+
+       La insignia pasó de píldora rellena a **etiqueta con medidor**: mono en
+       versalitas más tres segmentos, la misma forma que una fila de idiomas.
+       Siete tarjetas seguidas con siete rellenos sólidos daban siete manchas, y
+       el estado —que es metadato— pesaba más que el nombre del proyecto.
+
+       Eso cambia a qué umbral responden estos valores. Cuando el color era
+       fondo bastaba con separarse de la tarjeta (1.4.11, ≥ 3:1) porque la
+       legibilidad la ponía el blanco de encima. Ahora el color **es** el texto,
+       así que le aplica la 1.4.3 de la WCAG AA y tiene que llegar a ≥ 4.5:1
+       contra `--surface` él solo. Lo comprueba `contrast.test.ts`.
+
+       Los de claro ya lo cumplían (5.50 / 5.44 / 6.18). Los de oscuro no: eran
+       rellenos para texto blanco y sobre `--surface` oscuro daban 3.30 / 3.10 /
+       3.08, o sea justo por debajo. Suben a los valores de ahora, medidos en
+       7.37 / 7.24 / 5.75.
+
+       El fondo de referencia es `--surface`, que es lo que pintan la tarjeta de
+       Projects y el panel de ProjectDetail, no `--bg`.
+
+       «Código privado» tenía un gris que no se distinguía de un chip neutro:
+       con tres estados y un solo color apagado, el único que parecía no tener
+       estado era justamente el que sí lo tiene. Va en rosa, el tono más lejano
+       del verde de «En línea» y del ámbar de «En desarrollo». */
+    --status-published: light-dark(#187847, #3fbd7d);
+    --status-development: light-dark(#9b5a09, #d99a3a);
+    --status-private: light-dark(#a8385f, #e8698f);
+    --tooltip-bg: light-dark(#18201b, #eef3ef);
+    --tooltip-text: light-dark(#ffffff, #0d100e);
+    --focus-ring: light-dark(var(--focus-ring-light), var(--focus-ring-dark));
+    /**
+     * Superficies planas: la separación la da el borde, no la sombra.
+     *
+     * Los dos tokens siguen existiendo —los nombran doce reglas repartidas por
+     * seis componentes— pero ya no proyectan nada. `--shadow` era una difusa de
+     * 50 px calibrada para una tarjeta de 920, y `--shadow-raised` tres capas
+     * para lo que flota sobre el contenido: la barra, el enlace de salto, el
+     * rótulo del índice lateral.
+     *
+     * De las tres capas de `--shadow-raised` se queda la que no es una sombra:
+     * el filete especular de 1 px, que es un borde interior y es lo que levanta
+     * el canto superior del cristal de la barra.
+     *
+     * Se cambia aquí, en el token, y no en los doce sitios: revertirlo es
+     * devolver estas dos declaraciones, y ninguna regla del sitio se entera.
+     *
+     * `light-dark()` sólo admite colores, así que lo que dependa del tema sigue
+     * yendo por bloque de tema —de ahí que los dos ajustes de más abajo también
+     * se apaguen—.
+     *
+     * ## Por qué una sombra transparente y no `none`
+     *
+     * `--shadow` aparece dentro de listas: el aro de acento del panel de
+     * proyecto (`0 0 0 1px …, var(--shadow)`) y el anillo de foco del terminal.
+     * `box-shadow: 0 0 0 1px red, none` **no es válido** y el navegador tira la
+     * declaración entera, así que poner `none` no habría apagado una sombra:
+     * habría apagado también el aro y el anillo. Una sombra de radio cero y
+     * color transparente no pinta nada y sigue siendo una sombra.
+     */
+    --shadow: 0 0 0 0 transparent;
+    --shadow-raised: inset 0 1px 0 var(--gloss-edge);
+    /* El filete especular del cristal. En claro la barra es blanca al 88 % sobre
+       `--bg`, así que un blanco casi puro sí levanta el borde superior; en
+       oscuro basta un 6 %, y por encima empieza a parecer plástico.
+
+       Va suelto y no dentro de `--shadow-raised` porque la celda de idioma
+       activa necesita el filete sin las sombras.
+
+       Aquí había además un `--gloss-veil`, el degradado de velo que llevaba la
+       caja de los controles. Se ha ido con él: un degradado en el cromo es lo
+       que el sistema no admite, y el brillo lo pone este filete de 1 px, que es
+       un borde. */
+    --gloss-edge: light-dark(rgb(255 255 255 / 0.62), rgb(255 255 255 / 0.06));
+    --page-width: 920px;
+    /**
+     * La capa modal como sistema, y no como tres cajas sueltas.
+     *
+     * Había dos siluetas distintas —el detalle de proyecto a 1 rem con aro de
+     * acento, la paleta a 4 px— y tres velos con el color escrito a mano en
+     * `rgb(8 12 10 / …)`. Lo segundo era el fallo de bulto: un velo casi negro
+     * en tema claro apaga la página entera en vez de posponerla, y la única
+     * rama que sí lo tematizaba era la excepción de
+     * `prefers-reduced-transparency`, o sea que el caso raro estaba mejor
+     * resuelto que el normal.
+     *
+     * El radio es uno solo para que el bisel global caiga igual en los tres
+     * paneles y la capa modal se lea como la misma pieza que la tarjeta que la
+     * abre. Los tres velos siguen siendo tres porque tienen tres trabajos: el
+     * visor se apila sobre el detalle y tiene que leerse por encima, y la rama
+     * opaca es la que sustituye al desenfoque cuando no se puede componer.
+     */
+    --modal-radius: 1rem;
+    --modal-veil: light-dark(rgb(38 44 41 / 0.55), rgb(8 12 10 / 0.78));
+    --modal-veil-strong: light-dark(rgb(38 44 41 / 0.68), rgb(8 12 10 / 0.86));
+    --modal-veil-opaque: light-dark(rgb(38 44 41 / 0.88), rgb(8 12 10 / 0.94));
+    --font-sans:
+      var(--font-inter-variable), ui-sans-serif, system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono:
+      var(--font-jetbrains-mono-variable), ui-monospace, "SFMono-Regular",
+      Consolas, "Liberation Mono", Menlo, monospace;
+    /**
+     * La matriz de puntos como tipografía, no como excepción del hero.
+     *
+     * `--font-doto` se carga en `Layout` desde siempre pero sólo lo nombraba
+     * `Hero.astro`, con su pila de respaldo escrita a mano. Ahora es un token
+     * más: las cifras de `DateRange`, el ordinal de sección y el código del 404
+     * piden lo mismo —dígitos de instrumento— y ninguno debería repetir la pila.
+     *
+     * El nombre del hero **no** entra, y es el caso que da sentido al resto: se
+     * probó ahí y a 72 px los puntos tapaban las letras. Doto vale donde la
+     * cifra es un dato, no donde el texto es la página.
+     *
+     * Sigue sin ser tipografía de cuerpo: a tamaño de texto los puntos se cierran
+     * y deja de leerse. Se usa en cifras y en rótulos grandes, nunca en párrafos,
+     * y **nunca en papel** (ver los `@media print` de quien la usa).
+     */
+    --font-display: var(--font-doto), var(--font-mono);
+    /* El nombre del hero, y nada más. Se respalda en la grotesca del sitio y no
+       en `sans-serif` a secas: si Space Grotesk no llega, lo que se ve es la
+       página de siempre y no la tipografía del sistema. */
+    --font-name: var(--font-space-grotesk), var(--font-sans);
+    /* Etiqueta de panel de instrumentos: mono, versalitas y el tracking abierto
+       que necesita la caja alta para no apelmazarse. 11 px es el suelo —por
+       debajo la mono deja de leerse—, y a ese tamaño no hay excepción de «texto
+       grande» en la WCAG: todo lo que use esto tiene que dar 4.5:1. */
+    --label-size: 0.6875rem;
+    --label-tracking: 0.08em;
+    /**
+     * El «clic» de los controles: 96 % al pulsar y vuelta.
+     *
+     * Noventa milisegundos y una curva que sale disparada y frena en seco
+     * —`cubic-bezier(0.2, 0, 0, 1)`—. No es la misma familia que el resto de
+     * transiciones del sitio, que van en `ease` a 180-220 ms: aquellas
+     * acompañan un cambio de estado y esta responde a un dedo. Un botón que
+     * tarda 200 ms en hundirse ya no se siente como un botón.
+     *
+     * Sin rebote a propósito: el muelle es de las piezas que se mueven solas
+     * —el punto del índice, el icono del tema—, no de las que se pulsan. Aquí
+     * se busca el chasquido de una tecla, no el de un resorte.
+     */
+    --tick: 90ms cubic-bezier(0.2, 0, 0, 1);
+    /**
+     * El muelle de la casa: rigidez 260, amortiguamiento 28, masa 1.
+     *
+     * CSS no tiene función de muelle, así que va muestreado en `linear()`:
+     * veinticinco puntos a lo largo de 0,55 s, que es lo que tarda en quedar a
+     * una milésima del reposo. Rebota un 0,4 %, que no se ve: firme, sin bote.
+     *
+     * Hasta el 02-10-2026 lo calculaba Motion en cada animación. Ahora es una
+     * sola fuente para el punto del índice lateral (una `transition`) y para
+     * `animations.ts` (la Web Animations API). Sin `linear()` —Safari anterior a
+     * 17.2— cae a `ease`: se pierde el muelle, no el movimiento.
+     */
+    --ease-spring: linear(
+      0,
+      0.055,
+      0.178,
+      0.325,
+      0.47,
+      0.598,
+      0.706,
+      0.792,
+      0.858,
+      0.907,
+      0.942,
+      0.966,
+      0.982,
+      0.993,
+      0.999,
+      1.002,
+      1.004,
+      1.004,
+      1.004,
+      1.003,
+      1.003,
+      1.002,
+      1.002,
+      1.001,
+      1
+    );
+    --spring-duration: 550ms;
+    /* El motivo de puntos ya estaba en dos sitios —la banda que disuelve el
+       retrato y el barrido del banner de servicios—, cada uno con su receta.
+       Aquí pasa a ser sistema. */
+    --dot-grid: radial-gradient(
+      circle,
+      var(--border-hover) 1px,
+      transparent 1px
+    );
+    --dot-grid-size: 16px 16px;
+    /**
+     * El paso fino, que es el que de verdad se repetía.
+     *
+     * `--dot-grid` cubría el paso de 16 px —el fondo de la consola y el cierre
+     * de contacto— y dejaba fuera el de 4, que es el del marcador de sección,
+     * el filete del pie, la pista de `DateRange`, la banda del retrato, los
+     * guiones del diálogo y, a 5 px, el barrido del banner. Seis copias de la
+     * misma receta escritas a mano, cada una con su tinta.
+     *
+     * La tinta va en `--dot-ink` porque es lo único que cambia entre las seis:
+     * acento, `--border-hover`, `currentColor` o el fondo de la página. Con el
+     * color dentro del token no habría token, habría seis.
+     *
+     * Los radios se unifican en 1,1/1,2. Tres de los seis iban en 1/1,1: una
+     * décima de píxel que nadie distingue y que impedía compartir la
+     * declaración, que es justo lo contrario de tener un sistema.
+     */
+    --dot-fine: radial-gradient(
+      circle,
+      var(--dot-ink, currentColor) 1.1px,
+      transparent 1.2px
+    );
+    --dot-fine-size: 4px 4px;
+    color-scheme: light dark;
+  }
+
+  /* En papel, Inter y la mono vuelven a sus archivos sueltos: Chromium convierte
+     las instancias de una fuente variable en fuentes Type 3 al imprimir. Sólo se
+     descargan si alguien imprime; en pantalla bastan los variables (ver las
+     entradas `-variable` de `astro.config.mjs`). */
+  @media print {
+    :root {
+      --font-sans:
+        var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono:
+        var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", Consolas,
+        "Liberation Mono", Menlo, monospace;
+    }
+  }
+
+  :root[data-accent="cyan"] {
+    --accent-name: "CYAN";
+    --accent-light: #0b6878;
+    --accent-light-strong: #07505d;
+    --accent-light-soft: #def1f4;
+    --focus-ring-light: #087e90;
+    --accent-dark: #67c7d7;
+    --accent-dark-strong: #a2e1e9;
+    --accent-dark-soft: #12333a;
+    --focus-ring-dark: #67c7d7;
+  }
+
+  :root[data-accent="teal"] {
+    --accent-name: "TEAL";
+    --accent-light: #176a66;
+    --accent-light-strong: #10514e;
+    --accent-light-soft: #e0f1ef;
+    --focus-ring-light: #168178;
+    --accent-dark: #6bc9be;
+    --accent-dark-strong: #a6e2da;
+    --accent-dark-soft: #15332f;
+    --focus-ring-dark: #6bc9be;
+  }
+
+  :root[data-accent="indigo"] {
+    --accent-name: "INDIGO";
+    --accent-light: #4c57a3;
+    --accent-light-strong: #394280;
+    --accent-light-soft: #e9ebf8;
+    --focus-ring-light: #5865c2;
+    --accent-dark: #9da8ef;
+    --accent-dark-strong: #c7cdf8;
+    --accent-dark-soft: #252a48;
+    --focus-ring-dark: #9da8ef;
+  }
+
+  :root[data-accent="violet"] {
+    --accent-name: "VIOLET";
+    --accent-light: #67529a;
+    --accent-light-strong: #4f3d79;
+    --accent-light-soft: #efeafa;
+    --focus-ring-light: #765db1;
+    --accent-dark: #bca3e6;
+    --accent-dark-strong: #dacbf4;
+    --accent-dark-soft: #2d2542;
+    --focus-ring-dark: #bca3e6;
+  }
+
+  /* Las cinco de abajo amplían el sorteo a diez. Las cinco de arriba son todas
+     frías —de azul a violeta—, así que estas cubren el lado cálido y el neutro.
+
+     El acento se usa como color de texto (`article a:hover`, el marcador de las
+     listas), no solo como adorno: cada
+     `--accent-light` tiene que dar 4.5:1 contra `#f7f8f6` y cada
+     `--accent-dark` contra `#0d100e`. Por eso ningún ámbar ni naranja aparece
+     aquí con su tono de marca: en claro van bajados de luminosidad y en oscuro
+     subidos. Lo verifica `contrast.test.ts` leyendo estos mismos valores. */
+  :root[data-accent="amber"] {
+    --accent-name: "AMBER";
+    --accent-light: #8a6100;
+    --accent-light-strong: #6b4b00;
+    --accent-light-soft: #f7eddb;
+    --focus-ring-light: #a07200;
+    --accent-dark: #e0ab4f;
+    --accent-dark-strong: #f0cb8e;
+    --accent-dark-soft: #3a2c11;
+    --focus-ring-dark: #e0ab4f;
+  }
+
+  :root[data-accent="rose"] {
+    --accent-name: "ROSE";
+    --accent-light: #a8446b;
+    --accent-light-strong: #853553;
+    --accent-light-soft: #fae7ee;
+    --focus-ring-light: #c05180;
+    --accent-dark: #eb9ab5;
+    --accent-dark-strong: #f5c4d4;
+    --accent-dark-soft: #3f1f2c;
+    --focus-ring-dark: #eb9ab5;
+  }
+
+  :root[data-accent="emerald"] {
+    --accent-name: "EMERALD";
+    --accent-light: #1a7a4d;
+    --accent-light-strong: #125c3a;
+    --accent-light-soft: #e0f2e8;
+    --focus-ring-light: #1f9260;
+    --accent-dark: #5fcb94;
+    --accent-dark-strong: #9ce3bd;
+    --accent-dark-soft: #123528;
+    --focus-ring-dark: #5fcb94;
+  }
+
+  :root[data-accent="copper"] {
+    --accent-name: "COPPER";
+    --accent-light: #9a5230;
+    --accent-light-strong: #783f25;
+    --accent-light-soft: #f8e9e1;
+    --focus-ring-light: #b5613a;
+    --accent-dark: #e59a75;
+    --accent-dark-strong: #f2c3ac;
+    --accent-dark-soft: #3b2318;
+    --focus-ring-dark: #e59a75;
+  }
+
+  :root[data-accent="steel"] {
+    --accent-name: "STEEL";
+    --accent-light: #4d6472;
+    --accent-light-strong: #3a4d58;
+    --accent-light-soft: #e8eef1;
+    --focus-ring-light: #5b7787;
+    --accent-dark: #a0b8c6;
+    --accent-dark-strong: #c8d8e1;
+    --accent-dark-soft: #22303a;
+    --focus-ring-dark: #a0b8c6;
+  }
+
+  /**
+   * La undécima, y la única que no es un color elegido a ojo.
+   *
+   * `--accent-light` es **#d71921 exacto**, el rojo de Nothing. Cabía la duda de
+   * si pasaría AA: da 4,87:1 sobre `--bg` claro y 5,18:1 con blanco encima, así
+   * que entra sin retocar. Es la referencia que sostiene el resto de la portada
+   * —la matriz de puntos, los medidores segmentados, los rótulos de
+   * instrumento—, y con la paleta puesta el sitio se lee de una pieza.
+   *
+   * Lo que **no** puede ser ese rojo es el tema oscuro: #d71921 sobre `#0d100e`
+   * se queda en 3,69:1 y `--accent` se usa como color de texto. Ahí sube a
+   * #ff5a60, que da 6,27:1 y sigue siendo el mismo rojo, más claro.
+   *
+   * Las ocho medidas que exige `contrast.test.ts` van de 4,87 a 16,18. La más
+   * justa es la del rojo de marca, por construcción: es el único valor de esta
+   * paleta que no se ha podido mover.
+   */
+  :root[data-accent="nothing"] {
+    --accent-name: "NOTHING";
+    --accent-light: #d71921;
+    --accent-light-strong: #a3121a;
+    --accent-light-soft: #fce5e6;
+    --focus-ring-light: #c8161f;
+    --accent-dark: #ff5a60;
+    --accent-dark-strong: #ffa3a6;
+    --accent-dark-soft: #430c0f;
+    --focus-ring-dark: #ff5a60;
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+  }
+
+  /* En oscuro la profundidad ya venía del filete claro y no de la sombra —sobre
+     `#0d100e` una sombra negra no se ve—, así que al apagarlas el tema oscuro
+     es el que menos cambia. El filete se queda. */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+  }
+
+  html {
+    min-width: 320px;
+    overflow-x: clip;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    background: var(--bg);
+    color: var(--text);
+    scrollbar-gutter: stable;
+    /* Sin el destello azul que Chrome y WebKit pintan sobre lo que se toca en
+       móvil: el sitio ya responde con sus propios estados y el recuadro llegaba
+       tarde, con la forma de la caja y no la del control. El foco sigue
+       marcándose con `:focus-visible`. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* El texto de un control es su etiqueta, no contenido: un doble clic o un
+     arrastre torpe dejaba «Mostrar vista Markdown» seleccionado en azul. Va
+     acotado a los controles a propósito —el CV se sigue pudiendo seleccionar y
+     copiar entero, que es medio sentido de tenerlo en una página. */
+  :is(
+    .control-group a,
+    .control-group button,
+    .detail-trigger,
+    .detail-close,
+    .lightbox-close,
+    .nav-button
+  ) {
+    user-select: none;
+  }
+
+  body,
+  figure {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    /* `dvh` y no `vh`: en móvil `100vh` cuenta la barra del navegador aunque
+       esté visible, así que la página siempre sobraba por abajo. */
+    min-height: 100dvh;
+    overflow-x: clip;
+    background:
+      radial-gradient(
+        circle at 50% -12rem,
+        var(--accent-soft) 0,
+        transparent 34rem
+      ),
+      var(--bg);
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    margin: 0;
+    font-family: var(--font-sans);
+    color: var(--text);
+    letter-spacing: -0.035em;
+  }
+
+  p {
+    color: var(--text-muted);
+    font-size: 1rem;
+    line-height: 1.65;
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  /* Anillo de foco único para todo el sitio: los componentes no lo redefinen. */
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
+  @keyframes section-reveal {
+    from {
+      opacity: 0;
+      translate: 0 14px;
+    }
+
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
+  /* La aparición al hacer scroll va ligada al scroll, sin JS. El estado inicial
+     vive dentro del `@supports`: sin soporte (o con movimiento reducido) el
+     contenido se ve directamente, nunca oculto.
+
+     `screen` no es decorativo: en papel no hay scroll, así que la línea de
+     tiempo `view()` nunca avanza y las secciones que no caben en la primera
+     pantalla se quedan en el fotograma inicial, es decir en `opacity: 0`. Sin
+     esto, «Proyectos» y «Habilidades» desaparecían del PDF y de cualquier
+     impresión. */
+  @supports (animation-timeline: view()) {
+    @media screen and (prefers-reduced-motion: no-preference) {
+      /* En propiedades separadas a propósito: al minificar, el atajo
+         `animation` absorbe `animation-timeline` y produce una declaración
+         inválida que el navegador descarta entera. */
+      #web-view > section {
+        animation-name: section-reveal;
+        animation-duration: auto;
+        animation-timing-function: linear;
+        animation-fill-mode: both;
+        animation-timeline: view();
+        animation-range: entry 8% cover 22%;
+        /* La misma entrada, con nombre, para que la puedan mirar los
+           descendientes: el marcador de puntos de `Section.astro` se enciende
+           punto a punto sobre esta línea de tiempo. Sin nombrarla, un `view()`
+           propio del marcador mediría su caja de 26×3 px, que entra y sale del
+           borde de la pantalla en el mismo fotograma. */
+        view-timeline-name: --section-enter;
+      }
+    }
+  }
+
+  /**
+   * La barra se queda arriba del documento y se va con el scroll.
+   *
+   * Era `position: sticky`, y con ella venía todo un mecanismo: se plegaba al
+   * bajar, se desplegaba al subir y dejaba un chevrón para recuperarla
+   * (`utilityBar.ts`, ya borrado). Nada de eso tiene sentido en una barra que
+   * no persigue a nadie: es el encabezado del documento, se lee al llegar y
+   * vuelve subiendo.
+   *
+   * `relative` y no `static`: la tira Glyph se posiciona contra ella.
+   */
+  .utility-bar {
+    position: relative;
+    z-index: 100;
+    padding: 0.75rem clamp(1.25rem, 5vw, 3rem) 0;
+    pointer-events: none;
+  }
+
+  .utility-bar__content {
+    display: flex;
+    position: relative;
+    width: min(100%, var(--page-width));
+    min-height: 54px;
+    margin: 0 auto;
+    justify-content: flex-end;
+  }
+
+  /**
+   * La tira Glyph.
+   *
+   * Catorce bloques rectos en el canto inferior de la barra que se encienden de
+   * uno en uno según baja la página. Es el indicador de progreso dicho como lo
+   * diría un instrumento: bloques discretos, no una barra que crece.
+   *
+   * No sustituye al índice lateral —ése sólo existe a partir de 1200 px y dice
+   * *en qué* sección estás—; esto dice *cuánto* queda, y está en todos los
+   * anchos.
+   *
+   * Vive dentro de `@supports` porque sin líneas de tiempo de scroll —Firefox
+   * estable, a día de hoy— un carril vacío permanente sería ruido puro: mejor
+   * que no exista. Y dentro de `@media screen` porque en papel no hay scroll.
+   *
+   * Nota conocida: en un documento que no llega a desbordar la ventana la línea
+   * de tiempo no avanza y la tira se queda apagada. Se acepta —el carril es del
+   * tono del filete, no llama la atención— porque la alternativa es medir la
+   * altura con JS para un adorno.
+   */
+  .glyph-bar {
+    display: none;
+  }
+
+  @supports (animation-timeline: scroll()) {
+    @media screen and (prefers-reduced-motion: no-preference) {
+      .glyph-bar {
+        /* Los tres píxeles de hueco entre bloques van en píxeles y el paso en
+           porcentaje: así los catorce reparten el ancho que haya y la ranura
+           mide siempre lo mismo, que es lo que hace que se lean como piezas de
+           un panel y no como una barra a rayas. */
+        background-image: repeating-linear-gradient(
+          to right,
+          var(--border-hover) 0 calc(100% / 14 - 3px),
+          transparent 0 calc(100% / 14)
+        );
+        block-size: 3px;
+        display: block;
+        /* Contra el borde de la ventana y a todo el ancho, no dentro de los
+           920 px del contenido: es el estado del documento entero, no de la
+           columna de texto. La barra es `sticky`, así que hace de bloque
+           contenedor sin más. */
+        inset: 0 0 auto;
+        position: absolute;
+      }
+
+      /**
+       * La capa encendida es del ancho completo y se recorta, no se estira.
+       *
+       * Si el relleno creciera con `inline-size`, sus porcentajes se medirían
+       * contra su propia caja y los bloques se irían encogiendo en vez de
+       * aparecer: catorce piezas apretadas al principio y sueltas al final.
+       * Recortando una capa que ya mide lo mismo que el carril, el paso no se
+       * mueve nunca.
+       */
+      .glyph-bar::before {
+        background-image: repeating-linear-gradient(
+          to right,
+          var(--accent) 0 calc(100% / 14 - 3px),
+          transparent 0 calc(100% / 14)
+        );
+        clip-path: inset(0 100% 0 0);
+        content: "";
+        inset: 0;
+        position: absolute;
+        /* Propiedades sueltas, nunca el atajo `animation`: al minificar absorbe
+           `animation-timeline` y produce una declaración que el navegador
+           descarta entera. */
+        animation-name: glyph-bar-fill;
+        animation-duration: auto;
+        animation-timing-function: steps(14, jump-start);
+        animation-fill-mode: both;
+        animation-timeline: scroll(root block);
+      }
+
+      /**
+       * El arranque: las catorce celdas se encienden en cadena y se apagan.
+       *
+       * Va en una capa aparte y no en `::before` porque una caja sólo admite una
+       * línea de tiempo, y la de `::before` ya está atada al scroll. Ésta corre
+       * en la del documento: se ve al cargar cada página, que es lo que se
+       * busca —el aparato se enciende cuando llega una página nueva—.
+       *
+       * Termina en `opacity: 0` y no en `clip-path` recogido: apagarse deja el
+       * mando al indicador de scroll sin un fotograma en el que las dos capas
+       * digan cosas distintas.
+       *
+       * Propiedades sueltas, nunca el atajo `animation`, por lo mismo que la
+       * capa de abajo: al minificar absorbe `animation-timeline`.
+       */
+      .glyph-bar::after {
+        background-image: repeating-linear-gradient(
+          to right,
+          var(--accent) 0 calc(100% / 14 - 3px),
+          transparent 0 calc(100% / 14)
+        );
+        clip-path: inset(0 100% 0 0);
+        content: "";
+        inset: 0;
+        position: absolute;
+        animation-name: glyph-boot;
+        animation-duration: 620ms;
+        animation-timing-function: steps(14, jump-start);
+        animation-fill-mode: both;
+      }
+
+      /**
+       * El espectáculo del reloj de la barra.
+       *
+       * Reutiliza la capa de arranque: la luz sube, baja, vuelve y se apaga. El
+       * atributo no se quita solo —lo reinicia el propio guion en el clic
+       * siguiente—, así que no hay temporizador ni un rebote de la animación de
+       * arranque al soltarlo.
+       */
+      :root[data-glyph="show"] .glyph-bar::after {
+        animation-name: glyph-show;
+        animation-duration: 2s;
+      }
+
+      /**
+       * El acuse de recibo del aparato.
+       *
+       * Una pasada de ida y se apaga, 700 ms: cambiar de tema, cambiar de
+       * idioma, copiar el correo o enviar el formulario encienden la tira. Es lo
+       * que hace el Glyph de un teléfono Nothing —la carcasa contesta a lo que
+       * acaba de pasar—, y aquí la maquinaria ya estaba puesta.
+       *
+       * Más corta que `glyph-show` y sin el viaje de vuelta a propósito: aquélla
+       * responde a que alguien ha ido a buscarla, y ésta acompaña a otra cosa.
+       * Una respuesta de dos segundos a un cambio de tema se pondría por delante
+       * del cambio de tema.
+       *
+       * Los estados son excluyentes: `data-glyph` es un atributo y las dos capas
+       * de la tira están ocupadas —el scroll tiene `::before` y esto `::after`—.
+       * Dos avisos seguidos se ven como uno reiniciado, que es lo correcto.
+       */
+      :root[data-glyph="pulse"] .glyph-bar::after {
+        animation-name: glyph-pulse;
+        animation-duration: 700ms;
+      }
+    }
+  }
+
+  /* Como las otras dos, **termina en `opacity: 0`**: el atributo se queda
+     puesto, así que una animación que acabara encendida dejaría la tira pintada
+     hasta la siguiente navegación. */
+  @keyframes glyph-pulse {
+    0% {
+      clip-path: inset(0 100% 0 0);
+      opacity: 1;
+    }
+
+    60% {
+      clip-path: inset(0 0 0 0);
+      opacity: 1;
+    }
+
+    100% {
+      clip-path: inset(0 0 0 0);
+      opacity: 0;
+    }
+  }
+
+  @keyframes glyph-boot {
+    0% {
+      clip-path: inset(0 100% 0 0);
+      opacity: 1;
+    }
+
+    70% {
+      clip-path: inset(0 0 0 0);
+      opacity: 1;
+    }
+
+    100% {
+      clip-path: inset(0 0 0 0);
+      opacity: 0;
+    }
+  }
+
+  @keyframes glyph-show {
+    0% {
+      clip-path: inset(0 100% 0 0);
+      opacity: 1;
+    }
+
+    35% {
+      clip-path: inset(0 0 0 0);
+      opacity: 1;
+    }
+
+    58% {
+      clip-path: inset(0 0 0 100%);
+      opacity: 1;
+    }
+
+    82% {
+      clip-path: inset(0 0 0 0);
+      opacity: 1;
+    }
+
+    100% {
+      clip-path: inset(0 0 0 0);
+      opacity: 0;
+    }
+  }
+
+  @keyframes glyph-bar-fill {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+
+  /* Caja común de los controles de la barra. La repetían los cuatro con distinta
+     clase —misma superficie, mismo borde, mismo radio de 10, misma altura de 44 y
+     el mismo hover—, y como el CSS va incrustado en las tres páginas cada copia
+     se pagaba tres veces. Cada componente conserva solo lo suyo: el ancho fijo,
+     la tipografía o sus estados. */
+  /**
+   * El radio baja de 10 px a 4.
+   *
+   * Los seis controles de la barra son el bloque de interfaz más denso del
+   * sitio, y a 10 px de radio se leían como pastillas: el mismo lenguaje que un
+   * botón de sistema operativo. A 4 px son celdas de un panel, que es la lectura
+   * que buscan el resto de las piezas —el medidor de idiomas, el chip de fechas,
+   * el marcador de sección—.
+   *
+   * El octógono de `LanguageSwitcher` se queda como está: allí la forma
+   * distingue una pieza única, y repetirla seis veces la convertiría en fondo.
+   */
+  .bar-control {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    cursor: pointer;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 44px;
+    /* Ancla del piloto. */
+    position: relative;
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease,
+      box-shadow 220ms ease,
+      color 180ms ease,
+      opacity 180ms ease,
+      scale var(--tick);
+  }
+
+  @media (hover: hover) {
+    .bar-control:hover:not(:disabled) {
+      background: var(--surface-hover);
+      border-color: var(--border-hover);
+      box-shadow: var(--glow-hover);
+    }
+  }
+
+  /**
+   * El piloto de cada celda, en la esquina.
+   *
+   * El mismo recurso que los chips de contacto y el ojo del panel de servicios:
+   * un punto apagado al tono del filete que se enciende en acento cuando el
+   * control responde. Con seis celdas iguales en fila es lo que las convierte en
+   * un panel —cada una con su luz— en vez de en seis botones.
+   *
+   * Ningún control de la barra usaba `::after`, así que no cuesta un nodo.
+   * `LanguageSwitcher` no entra: no lleva `.bar-control` —su octógono se dibuja
+   * con sus dos pseudoelementos— y meterle una luz más sería el séptimo punto de
+   * una fila que ya tiene seis.
+   */
+  .bar-control::after {
+    background: var(--border-hover);
+    block-size: 4px;
+    border-radius: 999px;
+    content: "";
+    inline-size: 4px;
+    inset-block-start: 4px;
+    inset-inline-end: 4px;
+    position: absolute;
+    /* El piloto va en `--tick`, no en los 180 ms del resto: encenderse en dos
+       décimas es un desvanecido, y esto es una luz de aparato. La curva es la
+       misma que hunde la celda, así que el hundimiento y el destello son un
+       solo gesto y no dos que casi coinciden. */
+    transition:
+      background-color var(--tick),
+      box-shadow var(--tick);
+  }
+
+  .bar-control:focus-visible:not(:disabled)::after {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--glow-ink);
+  }
+
+  @media (hover: hover) {
+    .bar-control:hover:not(:disabled)::after {
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--glow-ink);
+    }
+  }
+
+  /* El acuse de recibo del control: se hunde mientras el dedo está encima.
+     `:active` y no `:focus`, porque lo que confirma es el gesto, no el foco; y
+     con `scale` en vez de `translate` para que la celda no se despegue de la
+     rejilla de la barra. En una celda de 44 px ese 0,96 es algo menos de un
+     píxel por lado, que es justo el recorrido de una tecla. */
+  .bar-control:active:not(:disabled) {
+    scale: 0.96;
+  }
+
+  /**
+   * Y el piloto destella al pulsar.
+   *
+   * Se encendía al pasar por encima y al recibir el foco, pero no al accionarse,
+   * que es el único de los tres momentos en que ha pasado algo. Sin esto el
+   * gesto se hundía en silencio: media respuesta.
+   *
+   * Va fuera de `@media (hover: hover)`: en una pantalla táctil `:active` es el
+   * dedo encima, y ahí es donde más falta hace el acuse.
+   */
+  .bar-control:active:not(:disabled)::after {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--glow-ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bar-control,
+    .bar-control::after {
+      transition: none;
+    }
+
+    .bar-control:active:not(:disabled) {
+      scale: 1;
+    }
+  }
+
+  /**
+   * La lectura de instrumento, en la mitad izquierda que estaba vacía.
+   *
+   * La barra tenía los siete controles pegados a la derecha y 600 px de nada al
+   * lado. Aquí va lo que pondría un aparato en su franja de estado: quién firma
+   * y dónde estás. La sección la escribe `SectionNav.astro` al calcular la
+   * activa, así que no hay guion nuevo.
+   *
+   * Por debajo de 700 px desaparece: es el ancho al que la barra empieza a ir
+   * justa, y entre un rótulo y los siete controles gana el control.
+   */
+  /**
+   * Lleva caja propia, y no es decoración.
+   *
+   * Sin ella el rótulo se quedaba flotando sobre el texto de la página: la barra
+   * es `sticky` y transparente, así que al plegarse los controles el rótulo se
+   * quedaba solo encima de una tarjeta de proyecto, ilegible y con pinta de
+   * error. Es el mismo problema que tuvo la tira Glyph cuando se apoyaba en el
+   * canto inferior de la barra.
+   *
+   * La caja es la del expansor —superficie casi opaca, filete de 1 px y 4 px de
+   * radio—, que es la pieza que ya resuelve «flotar sobre el contenido» en esta
+   * barra. Así el rótulo se lee como otra celda del panel y puede quedarse a la
+   * vista mientras se baja, que es justo cuando dice algo.
+   */
+  .bar-readout {
+    align-items: center;
+    align-self: center;
+    background-color: color-mix(
+      in srgb,
+      var(--surface-raised) 92%,
+      transparent
+    );
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    border-radius: 4px;
+    box-shadow: var(--shadow-raised);
+    color: var(--text-faint);
+    display: flex;
+    gap: 0.5rem;
+    margin-inline-end: auto;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0.1875rem 0.6rem;
+    white-space: nowrap;
+  }
+
+  .bar-readout__meta {
+    align-items: center;
+    display: inline-flex;
+    padding-inline-end: 0.35rem;
+  }
+
+  /**
+   * Ningún `<dialog>` bloquea el scroll de fondo por su cuenta.
+   *
+   * `scrollbar-gutter: stable` ya está en `:root`, así que ocultarlo no provoca
+   * salto horizontal. El visor de capturas entra en el selector para que el
+   * bloqueo aguante aunque alguna vez se abra sin su detalle debajo.
+   *
+   * Vivía en `Projects.astro`. Está aquí porque habla del documento entero, y
+   * el índice de proyectos también abre fichas: no puede depender de que la
+   * sección de proyectos de la portada esté montada.
+   */
+  html:has(dialog[data-detail][open], dialog[data-lightbox][open]) {
+    overflow: hidden;
+  }
+
+  /* La matrícula. El tono más apagado de la escala: nombra el aparato, no dice
+     nada que cambie. */
+  .bar-callsign {
+    color: var(--text-faint);
+  }
+
+  /**
+   * El arranque ocupa el sitio del rótulo, no se pone al lado.
+   *
+   * Los dos se intercambian con `data-booting`, que decide un guion en línea del
+   * `<head>`. Al terminar de escribir, el runtime quita el atributo y el rótulo
+   * vuelve: no hay dos estados visibles a la vez y la caja no cambia de alto.
+   *
+   * Por debajo de 700 px no se ve, por lo mismo que no se ve el rótulo: la
+   * regla está más abajo, junto a la suya. Aparecer y desaparecer en un móvil
+   * sería peor que no salir.
+   */
+  .bar-boot {
+    display: none;
+  }
+
+  :root[data-booting] .bar-boot {
+    color: var(--text-faint);
+    display: inline;
+    font-variant-numeric: tabular-nums;
+  }
+
+  :root[data-booting] .bar-readout__meta {
+    display: none;
+  }
+
+  /* El cursor mientras teclea: un bloque que no parpadea. En un panel de
+     instrumentos la luz está o no está; el parpadeo es de un terminal. */
+  :root[data-booting] .bar-boot::after {
+    content: "▌";
+    color: var(--accent);
+  }
+
+  /**
+   * La hora del aparato, y el interruptor de la tira Glyph.
+   *
+   * En la fuente de puntos, que es la que el sitio reserva para las cifras
+   * —`DateRange`, el ordinal de sección, el código del 404—: seis dígitos que
+   * cambian solos es exactamente su caso. Cifras tabulares para que el rótulo no
+   * cambie de ancho sesenta veces por minuto, y separada del resto por su propio
+   * punto, como la sección.
+   *
+   * Al tono más apagado de la escala, y no en acento: se probó encendida y en
+   * la misma línea competía con el nombre de la sección, que es el dato que sí
+   * dice algo. El acento se queda en la sección; la hora es el fondo de panel
+   * que corre solo.
+   *
+   * Sin caja: en una franja de estado un botón con filete y superficie sería la
+   * pieza más ruidosa de la barra para lo que es —un huevo de pascua—. Lo que se
+   * ve es la hora; que además se pueda pulsar lo descubre quien lo intente.
+   * 24 px de destino táctil, el mínimo de la WCAG 2.5.8: aquí no se pierde nada
+   * por no acertar a la primera.
+   *
+   * Igual que la sección, no se pinta si no hay hora: sin JS el rótulo se queda
+   * como estaba y no como un panel al que le falta una pieza. El guardián mira
+   * al hijo, que es quien lleva el texto; el botón nunca está vacío.
+   */
+  .bar-clock {
+    display: none;
+  }
+
+  .bar-clock:has(> [data-bar-clock]:not(:empty)) {
+    align-items: center;
+    background: none;
+    border: 0;
+    color: var(--text-faint);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    justify-content: center;
+    letter-spacing: 0.02em;
+    min-block-size: 24px;
+    padding: 0;
+    transition: color 180ms ease;
+  }
+
+  /**
+   * El separador va con margen y no con espacios dentro del `content`.
+   *
+   * El de la sección es un `" · "` a secas y funciona porque su caja es
+   * inline. Aquí el botón es un contenedor flexible, así que el pseudoelemento
+   * pasa a ser un elemento flexible anónimo y el navegador se come los espacios
+   * de los extremos: el punto salía pegado a la hora por los dos lados.
+   */
+  .bar-clock:has(> [data-bar-clock]:not(:empty))::before {
+    color: var(--text-faint);
+    content: "·";
+    letter-spacing: var(--label-tracking);
+    margin-inline: 0.4em 0.55em;
+  }
+
+  .bar-clock:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) {
+    .bar-clock:hover {
+      color: var(--text);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bar-clock {
+      transition: none;
+    }
+  }
+
+  /* Sólo aparece cuando hay sección que anunciar, con su separador dentro: un
+     « · » suelto en la barra mientras se carga la página es basura. */
+  .bar-readout__section:not(:empty) {
+    color: var(--accent);
+  }
+
+  .bar-readout__section:not(:empty)::before {
+    color: var(--text-faint);
+    content: " · ";
+  }
+
+  /**
+   * Cuánto queda, en cifras.
+   *
+   * La tira Glyph del canto dice lo mismo con catorce bloques, pero sólo donde
+   * hay líneas de tiempo de scroll y sin movimiento reducido. Esto lo dice
+   * siempre y con precisión, que es lo que distingue un panel de un adorno: la
+   * barra da el número y la tira la proporción.
+   *
+   * En la fuente de puntos y con cifras tabulares, como el reloj y como el
+   * ordinal de cada sección: en este sitio las cifras se escriben así.
+   */
+  .bar-count:not(:empty) {
+    color: var(--text-faint);
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+
+  .bar-count:not(:empty)::before {
+    content: " · ";
+    letter-spacing: var(--label-tracking);
+  }
+
+  /**
+   * En móvil el rótulo no se encoge: se va.
+   *
+   * Aquí sólo se escondía `.bar-readout__meta`, así que la caja seguía puesta
+   * con «IEM» dentro. Y la caja tiene `overflow: hidden` y `min-width: 0`,
+   * mientras que los controles no encogen: a 390 px le quedaban 29 px para 42
+   * de texto —la M cortada por la mitad— y a 320 px se iba a `left: -31px`, o
+   * sea fuera de la pantalla. Encima es la única pieza de la barra que se queda
+   * a la vista cuando los controles se pliegan, así que ese muñón viajaba por
+   * encima de las tarjetas al bajar.
+   *
+   * Se va entera, que es lo que ya decía el comentario de `.bar-readout`. El
+   * arranque se va con ella: aparecer y desaparecer en un móvil sería peor que
+   * no salir, y ahora no hace falta una regla propia para esconderlo.
+   */
+  @media (width <= 700px) {
+    .bar-readout {
+      display: none;
+    }
+  }
+
+  /**
+   * El envoltorio: sólo reparte y se pliega.
+   *
+   * El plegado al bajar vive aquí y no en cada caja, que es lo que permite que
+   * el idioma y la vista sean dos grupos y se sigan yendo a la vez. Sin caja
+   * propia —ni filete ni superficie—: si la tuviera, la barra tendría una
+   * bandeja con dos bandejas dentro.
+   */
+  .control-groups {
+    align-items: center;
+    display: inline-flex;
+    /* Medio rem: lo justo para que se lean como dos piezas y no tanto como para
+       que parezcan de dos sitios distintos de la barra. Dentro de cada caja las
+       celdas van a 0.25rem, así que la separación entre grupos es el doble que
+       la que hay entre controles, y esa proporción es la que hace el grupo. */
+    gap: 0.5rem;
+    opacity: 1;
+    pointer-events: auto;
+    translate: 0 0;
+    transition:
+      translate 220ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 220ms ease;
+  }
+
+  .control-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    /**
+     * Cuatro píxeles, el mismo radio que los controles de dentro y que el resto
+     * de la interfaz.
+     *
+     * Había tres radios en una sola barra —contenedor 8, controles 4, expansor
+     * 12— y eso es lo contrario de un panel: en un aparato todas las piezas
+     * comparten el mismo corte. Al ser el mismo que el de los controles, la
+     * caja deja de leerse como una bandeja con botones dentro y pasa a leerse
+     * como una fila de celdas, que es lo que es.
+     */
+    border-radius: 4px;
+    background-color: color-mix(
+      in srgb,
+      var(--surface-raised) 88%,
+      transparent
+    );
+    /* Aquí había un `linear-gradient` de velo de cristal. Fuera: un degradado en
+       el cromo es exactamente lo que el sistema no admite —el brillo lo da el
+       filete especular de 1 px que va dentro de `--shadow-raised`, que es un
+       borde y no una capa de charol—. Con él se ha ido el token `--gloss-veil`,
+       que no lo usaba nadie más. */
+    box-shadow: var(--shadow-raised);
+    transition:
+      border-color 220ms ease,
+      box-shadow 220ms ease;
+  }
+
+  @media (hover: hover) {
+    /* La barra entera se enciende al entrar en ella, y el control concreto lleva
+       además su propio halo: dos niveles de respuesta, no uno.
+
+       Aquí va una sola capa difusa y no el `--glow-hover` de los controles: con
+       el filete de 1 px encendido, la caja de 54 px de alto y 900 de ancho
+       quedaba subrayada en acento de punta a punta, que es mucho ruido para lo
+       que es solo un contenedor. */
+    .control-group:hover {
+      border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+      box-shadow:
+        var(--shadow-raised),
+        0 0 22px -6px color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+
+    /* Nada de tinta de acento al pasar por encima: el hover de la barra es el
+       mismo que el de los botones «volver / copiar / descargar .md»
+       —superficie, filete y halo—, y ahí el texto se queda en `--text`. Antes
+       esto lo teñía de acento, así que el mismo gesto daba dos resultados según
+       en qué control cayera.
+
+       Se fija `--text` en vez de no tocar el color porque las siglas de idioma
+       están en `--text-muted` en reposo —los idiomas que no son el tuyo van
+       apagados—: sin esto se quedarían grises al iluminarse el resto del botón.
+       Para los otros cinco controles, que ya son `--text`, no cambia nada.
+
+       El acento sigue marcando **estado**, que es lo que sí significa algo: la
+       vista activa (`[aria-pressed="true"]`, más específico que esto) y la celda
+       del idioma actual, que es un `span` y no entra aquí. */
+    .control-group :is(a, button):hover {
+      color: var(--text);
+    }
+  }
+
+  /* El desenfoque obliga a componer una capa que se repinta en cada frame de
+     scroll. En escritorio sobra potencia; en móvil, que es donde más se nota,
+     la barra se queda con el fondo translúcido y ya. */
+  @media (width >= 900px) {
+    .control-group {
+      /* `saturate` acompaña al desenfoque: el blur y el velo blanco lavan el
+         color que se ve a través, y sin recuperarlo la barra parece lechosa en
+         vez de cristal. */
+      backdrop-filter: blur(16px) saturate(1.4);
+    }
+  }
+
+  /**
+   * Menos transparencia: se opacan las superficies y se quita el desenfoque.
+   *
+   * El sitio apila translucidez sobre translucidez —la barra al 88 %, el velo del
+   * cristal, el desenfoque, el fondo del diálogo—, que es justo lo que estorba a
+   * quien apaga los efectos de transparencia del sistema.
+   *
+   * Los halos se quedan: son luz, no translucidez. Y no es un detalle de
+   * purismo: el Chromium sin cabeza responde `reduce` a esta consulta, así que
+   * meter los neones aquí los apagaba en toda la batería de pruebas —y en las
+   * capturas de referencia— sin que nadie lo hubiera pedido.
+   */
+  @media (prefers-reduced-transparency: reduce) {
+    :root {
+      --gloss-veil: transparent;
+    }
+
+    .control-group {
+      backdrop-filter: none;
+      background-color: var(--surface-raised);
+      background-image: none;
+    }
+  }
+
+  /**
+   * Más contraste: además de lo anterior, fuera los halos y el tinte del CTA.
+   *
+   * Se apaga desde los tokens, así que dos líneas cubren los quince sitios que
+   * los usan.
+   */
+  @media (prefers-contrast: more) {
+    :root {
+      --cta-fill: var(--accent-soft);
+      --glow-hover: none;
+      --glow-hover-filter: none;
+      --glow-ink: transparent;
+      --gloss-veil: transparent;
+    }
+
+    .control-group {
+      backdrop-filter: none;
+      background-color: var(--surface-raised);
+      background-image: none;
+      border-color: var(--border-hover);
+    }
+
+    /**
+     * La pérdida de señal sí se apaga aquí, al contrario que los halos: el
+     * desdoble de `signal-ghost-loop` es literalmente texto desenfocado en dos
+     * colores, o sea lo contrario de lo que se está pidiendo. Y ahora importa
+     * más que antes, porque ya no espera a que alguien pase el ratón.
+     *
+     * `:root .signal-text` y no `.signal-text` a secas: una consulta de medio no
+     * suma especificidad, y la regla que enciende la animación vive ~180 líneas
+     * más abajo. A igualdad de peso ganaba la última, así que esta salida de
+     * emergencia no apagaba nada — tampoco cuando era `:hover`. El `:root`
+     * sobrante es lo que la pone por delante.
+     */
+    :root .signal-text,
+    :root[data-signal="locale"]::view-transition-old(root) {
+      animation: none;
+    }
+  }
+
+  .skip-link {
+    position: absolute;
+    left: 50%;
+    top: 0.5rem;
+    z-index: 200;
+    translate: -50% -200%;
+    padding: 0.7rem 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 0.65rem;
+    background: var(--surface-raised);
+    color: var(--text);
+    font-size: 0.875rem;
+    font-weight: 600;
+    box-shadow: var(--shadow);
+  }
+
+  .skip-link:focus-visible {
+    translate: -50% 0;
+  }
+
+  /**
+   * El aviso de idioma: la caja de `.control-group` en la esquina libre.
+   *
+   * Misma receta de anclaje que `.ask-dock-trigger`, en el lado contrario e
+   * `env(safe-area-inset-*)` incluido — en un móvil con barra de gestos, `1rem`
+   * a secas lo deja debajo del indicador de inicio.
+   *
+   * `z-index: 20`, el mismo que el dock: por encima del contenido y por debajo
+   * de la barra de utilidades (100) y de los diálogos.
+   */
+  .locale-hint {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.65rem;
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    box-shadow: var(--shadow-raised);
+    display: flex;
+    gap: 0.6rem;
+    left: calc(1rem + env(safe-area-inset-left, 0px));
+    max-inline-size: min(22rem, calc(100vw - 2rem));
+    padding: 0.5rem 0.5rem 0.5rem 0.85rem;
+    position: fixed;
+    z-index: 20;
+  }
+
+  /**
+   * Y esto no es redundante con el atributo `hidden`.
+   *
+   * `hidden` esconde poniendo `display: none` desde la hoja del navegador, que
+   * pierde contra cualquier `display` de autor: el `display: flex` de aquí
+   * arriba lo anulaba, y el aviso salía **siempre** —en el idioma de la página,
+   * que es justo a quien no hay que sugerirle nada— y descartarlo no lo quitaba.
+   * Lo cazaron las pruebas de este bloque.
+   */
+  .locale-hint[hidden] {
+    display: none;
+  }
+
+  /**
+   * En estrecho, encima del dock y no a su lado.
+   *
+   * A 375 px el aviso mide 343 y arranca en 16, así que llegaba hasta el 359 de
+   * los 375 que hay: se metía debajo del disparador de `AskDock`, que vive en la
+   * esquina contraria, y el aspa de descartar quedaba **tapada**. Medido: el
+   * dock se comía el clic.
+   *
+   * Se sube por encima de él —44 px de dock más el `1rem` que lo separa del
+   * borde, más un respiro— y se estira de lado a lado, que a este ancho se lee
+   * mejor que una caja estrecha.
+   */
+  @media (width <= 700px) {
+    .locale-hint {
+      bottom: calc(1rem + 44px + 0.6rem + env(safe-area-inset-bottom, 0px));
+      max-inline-size: none;
+      right: calc(1rem + env(safe-area-inset-right, 0px));
+    }
+  }
+
+  .locale-hint__body {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.4;
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  .locale-hint__action {
+    color: var(--accent);
+    flex: 0 0 auto;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    white-space: nowrap;
+  }
+
+  /* 44 px de objetivo (WCAG 2.5.8) sin que el aspa ocupe 44 px de dibujo: la
+     caja crece con el relleno y el icono se queda en 16. */
+  .locale-hint__dismiss {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: 0.4rem;
+    color: var(--text-faint);
+    cursor: pointer;
+    display: flex;
+    flex: 0 0 auto;
+    justify-content: center;
+    min-block-size: 44px;
+    min-inline-size: 44px;
+    padding: 0;
+  }
+
+  @media (hover: hover) {
+    .locale-hint__dismiss:hover {
+      color: var(--text);
+    }
+  }
+
+  /* Se descubre ya puesto, sin entrada: aparece por debajo del contenido y a un
+     lado, así que no hay nada que anunciar con movimiento. */
+  @media (prefers-reduced-motion: reduce) {
+    .locale-hint__dismiss {
+      transition: none;
+    }
+  }
+
+  /**
+   * Etiqueta de dato: mono, versalitas, 11 px.
+   *
+   * Vive aquí y no en cada componente por lo mismo que `.bar-control`: el CSS
+   * va incrustado en las tres páginas, así que cada copia se paga tres veces.
+   * La usan el índice del encabezado de sección, la fluidez de los idiomas, el
+   * grado de los estudios y el pie.
+   *
+   * `--text-muted` y no `--text-faint`: a 11 px el tono más apagado de la
+   * escala se queda en 3,4:1 contra `--surface`, y esto es texto, no adorno.
+   */
+  .label-mono {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--label-size);
+    letter-spacing: var(--label-tracking);
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  /**
+   * La píldora mono: una opción corta y pulsable.
+   *
+   * Vive aquí y no en cada componente por lo mismo que `.bar-control` y
+   * `.label-mono`: el CSS va incrustado en cada página, así que cada copia se
+   * paga tantas veces como páginas hay.
+   *
+   * Y aquí llegó **desduplicando, no añadiendo**. Estaban las teclas rápidas del
+   * móvil de la consola (`.console-key`) y las sugerencias del panel del
+   * asistente (`.ask-dock-suggestion`), escritas por separado y con el mismo
+   * fondo, filete, radio, color, familia y cuerpo. Las sugerencias de la consola
+   * iban a ser la tercera.
+   *
+   * Lo que **no** entra aquí es en qué se diferencian, que es poco y es
+   * deliberado: la tecla del móvil pide 32 px de alto porque se pulsa con un
+   * dedo y no con un puntero, y cada fila tiene su propio relleno según dónde
+   * viva. Eso se queda en su componente.
+   *
+   * `--text-muted` y no `--text-faint`: a 0,75 rem el tono más apagado de la
+   * escala no llega al contraste mínimo contra `--surface`, y esto es texto que
+   * hay que leer para elegir.
+   */
+  .chip-mono {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    /* El mínimo de la WCAG 2.2 (2.5.8) para un objetivo de puntero. */
+    min-block-size: 24px;
+    padding: 0.25rem 0.5rem;
+    /* A la izquierda porque una pregunta larga envuelve, y centrada quedaría en
+       bandera. */
+    text-align: left;
+    transition:
+      border-color 160ms ease,
+      color 160ms ease;
+  }
+
+  /**
+   * La fila que las agrupa.
+   *
+   * `flex: 0 0 auto` no es de adorno: las dos filas de la consola son hijas de
+   * un flex en columna con desplazamiento propio, y un hijo de flex trae
+   * `flex-shrink: 1` de fábrica. En cuanto la salida pasa del alto del marco, el
+   * navegador reparte el recorte, y una fila que envuelve se encoge por debajo
+   * de su contenido y se solapa con lo siguiente. Es el mismo motivo por el que
+   * lo lleva `.console-line`.
+   */
+  .chip-mono-row {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  @media (hover: hover) {
+    .chip-mono:hover {
+      border-color: var(--border-hover);
+      color: var(--text);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chip-mono {
+      transition: none;
+    }
+  }
+
+  /**
+   * El control con corchetes: entrar y salir, dicho igual en todo el sitio.
+   *
+   * Vive aquí y no en cada componente por lo mismo que `.chip-mono` y
+   * `.label-mono`: el CSS va incrustado en cada página, así que cada copia se
+   * paga tantas veces como páginas hay. Y aquí llegó **desduplicando**: existía
+   * cuatro veces —`[ LEER SOBRE MÍ ]` en la portada y `[ ← VOLVER AL
+   * PORTFOLIO ]` en las tres landings—, y las cuatro copias no eran iguales:
+   *
+   * - Las de `/sobre-mi` y `/servicios` eran byte a byte idénticas, comentarios
+   *   incluidos. Ésas son las que fijan lo que hay aquí abajo.
+   * - La de `/privacidad` **se había ido a otro sitio**: sin fondo, sin filete,
+   *   sin radio y sin transición, con el tono apagado y los corchetes sin clase.
+   *   Era texto suelto con área de 44 px, no un control. Nadie lo notó porque
+   *   ninguna prueba la miraba.
+   * - La de la portada no tenía halo al pasar por encima ni transición en los
+   *   corchetes; el color del corchete daba un salto seco.
+   *
+   * Lo que queda en cada componente es lo que de verdad es suyo: el margen —la
+   * portada lo pone hacia abajo, las landings hacia arriba— y poco más.
+   */
+  /**
+   * El botón relleno de las acciones principales: descargar el CV.
+   *
+   * La caja y la letra son las de `.bracket-link`, que es su pareja en cada
+   * fila donde sale; el relleno es el del botón de servicios
+   * (`--hire-fill`). Así se lee como la primera de las dos sin inventar un
+   * tercer estilo de botón.
+   *
+   * Vive aquí y no en `Hero.astro` desde el 07-10-2026: el cierre de cada
+   * ficha de proyecto ofrece las dos mismas salidas, y un estilo acotado a un
+   * componente obligaba a copiarlo. Copiado, el día que cambie uno de los dos
+   * botones cambia sólo ese.
+   */
+  .cta {
+    align-items: center;
+    background: var(--hire-fill);
+    border: 1px solid var(--hire-fill);
+    border-radius: 4px;
+    color: var(--hire-text);
+    display: inline-flex;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    gap: 0.5rem;
+    letter-spacing: 0.06em;
+    min-height: 44px;
+    padding: 0.65rem 0.95rem;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition:
+      border-color 180ms ease,
+      box-shadow 220ms ease;
+  }
+
+  .cta svg {
+    display: block;
+    flex: none;
+  }
+
+  @media (hover: hover) {
+    .cta:hover {
+      border-color: var(--accent);
+      box-shadow: var(--glow-hover);
+    }
+  }
+
+  /**
+   * La letra, en minúscula y sin apretar (07-10-2026).
+   *
+   * Iban en versalita de 700 con 0,06em de separación, que es la receta del
+   * rótulo de una sección, no la de un enlace que alguien va a pulsar. Cuatro
+   * de estos conviven con el botón relleno del CV, y gritando los cinco a la
+   * vez no se distingue cuál es la acción principal: ahora el relleno se queda
+   * la mayúscula y éstos bajan a peso 500 y caja normal. Se lee antes y la
+   * jerarquía se ve sin pensarla.
+   */
+  .bracket-link {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border-control);
+    border-radius: 4px;
+    color: var(--text);
+    display: inline-flex;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    font-weight: 500;
+    gap: 0.5rem;
+    letter-spacing: 0.01em;
+    min-height: 44px;
+    padding: 0.65rem 0.9rem;
+    text-decoration: none;
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease,
+      box-shadow 220ms ease,
+      color 180ms ease;
+  }
+
+  /**
+   * Los corchetes se abren al apuntar.
+   *
+   * Es la pieza que le da identidad a estos cuatro controles, y hasta ahora
+   * sólo cambiaba de color. Separarlos 3px hacia fuera cuesta nada —es un
+   * `translate` de dos `<span>` que ya existen— y convierte el hover en un
+   * gesto: el control se abre para dejar pasar. Va con el muelle de la casa,
+   * que es el mismo que usa el punto del índice lateral.
+   *
+   * `translate` y no `margin`: una propiedad compuesta no toca el flujo, así
+   * que el botón no cambia de ancho ni empuja a su vecino al apuntarlo.
+   */
+  .bracket-link__bracket {
+    color: var(--text-faint);
+    transition:
+      color 180ms ease,
+      translate var(--spring-duration) var(--ease-spring);
+  }
+
+  .bracket-link__arrow {
+    display: inline-flex;
+    margin-inline-start: -0.15rem;
+    transition: translate var(--spring-duration) var(--ease-spring);
+  }
+
+  .bracket-link__arrow svg {
+    display: block;
+  }
+
+  /* El icono se pega a la etiqueta y no reparte el hueco del `gap`: son una
+     sola cosa —la flecha y lo que dice— frente a los corchetes, que enmarcan. */
+  .bracket-link__icon {
+    display: inline-flex;
+    margin-inline-end: -0.15rem;
+    transition: translate var(--spring-duration) var(--ease-spring);
+  }
+
+  .bracket-link__icon svg {
+    display: block;
+  }
+
+  @media (hover: hover) {
+    .bracket-link:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-hover);
+      box-shadow: var(--glow-hover);
+    }
+
+    .bracket-link:hover .bracket-link__bracket {
+      color: var(--accent);
+    }
+  }
+
+  /* El foco del teclado abre lo mismo que el puntero: quien navega tabulando
+     ve el gesto, no sólo el anillo. */
+  .bracket-link:focus-visible .bracket-link__bracket:first-child,
+  .bracket-link:hover .bracket-link__bracket:first-child {
+    translate: -3px 0;
+  }
+
+  .bracket-link:focus-visible .bracket-link__bracket:last-child,
+  .bracket-link:hover .bracket-link__bracket:last-child {
+    translate: 3px 0;
+  }
+
+  /* Y la flecha avanza en su sentido: la de volver tira hacia atrás. */
+  .bracket-link:focus-visible .bracket-link__arrow,
+  .bracket-link:hover .bracket-link__arrow {
+    translate: 3px 0;
+  }
+
+  .bracket-link:focus-visible .bracket-link__icon,
+  .bracket-link:hover .bracket-link__icon {
+    translate: -3px 0;
+  }
+
+  /* Sin movimiento, sólo el color. El estado final es el de reposo: nada se
+     queda desplazado, que es lo que pide la preferencia. */
+  @media (prefers-reduced-motion: reduce) {
+    .bracket-link,
+    .bracket-link__arrow,
+    .bracket-link__icon,
+    .bracket-link__bracket {
+      transition: none;
+    }
+
+    .bracket-link:focus-visible .bracket-link__bracket,
+    .bracket-link:hover .bracket-link__bracket,
+    .bracket-link:focus-visible .bracket-link__arrow,
+    .bracket-link:hover .bracket-link__arrow,
+    .bracket-link:focus-visible .bracket-link__icon,
+    .bracket-link:hover .bracket-link__icon {
+      translate: none;
+    }
+  }
+
+  /* Sin halo donde se pide contraste, igual que el resto de controles. La tenía
+     `/servicios` y no `/sobre-mi`; ahora la tienen las cuatro. */
+  @media (prefers-contrast: more) {
+    .bracket-link:hover {
+      box-shadow: none;
+    }
+  }
+
+  /**
+   * La esquina achaflanada, la silueta del sitio.
+   *
+   * El conmutador de idioma lleva un octógono desde su rediseño y era la única
+   * pieza con esa forma; el resto seguía con esquinas redondas. Aquí el corte
+   * se extiende a lo que se repite en rejilla —tarjetas de proyecto, chips de
+   * habilidades, chips de contacto y tarjetas de la landing—, que es donde una
+   * silueta compartida se lee como sistema y no como excepción.
+   *
+   * ## Por qué `corner-shape` y no `clip-path`
+   *
+   * `clip-path` es lo que usa el conmutador, y por eso ese archivo dibuja la
+   * pared con dos pseudoelementos: **el recorte se come el `border` y el
+   * `box-shadow`**. Aquí eso no vale — las tarjetas de proyecto tienen filete de
+   * guiones, halo de acento al pasar por encima y una tira de puntos en su
+   * `::before`, así que recortarlas obligaría a reconstruir las tres cosas.
+   * `corner-shape` recorta la caja **conservando** borde y sombra, que es
+   * exactamente lo que hace falta.
+   *
+   * ## Qué pasa donde no llega
+   *
+   * Chromium y WebKit lo entienden; Firefox todavía no. El `@supports` deja las
+   * esquinas redondas allí, que es el aspecto de antes: no se pierde nada, sólo
+   * el gesto. El radio ya declarado por cada pieza es el que decide cuánto se
+   * corta, así que no hay una segunda medida que mantener.
+   *
+   * Va por selector y no por una clase `.chamfer` en el marcado: son unas
+   * treinta y cinco piezas por página entre chips y tarjetas, y la clase se
+   * pagaría en cada una mientras que esto son cuatro selectores una vez.
+   */
+  @supports (corner-shape: bevel) {
+    .contact-list a,
+    .project-list article,
+    .cards .card,
+    .detail-panel,
+    [data-tech] {
+      corner-shape: bevel;
+    }
+  }
+
+  /**
+   * Las escuadras de instrumento.
+   *
+   * Las llevan la tarjeta de proyecto, la de la landing de servicios y el
+   * diálogo de detalle (la paleta de comandos también, hasta el 06-10-2026).
+   * Vivían en `Projects.astro`, con la tarjeta; están aquí desde que son varias
+   * piezas y no una, porque el CSS con ámbito de componente no se
+   * comparte y la copia pegada en cada panel se pagaba tres veces —el
+   * presupuesto de CSS del build la cazó a la primera—.
+   *
+   * Por selector y no por clase, por lo mismo que el bisel de aquí arriba: son
+   * tres piezas por nombre pero veintitantas por página —siete tarjetas y siete
+   * diálogos de detalle—, y `class="instrument-frame"` repetido se paga en cada
+   * una. Escribirlo como clase costaba 370 bytes de HTML por página y se comió
+   * el presupuesto de `check-build` de una sentada.
+   *
+   * ## Qué dibuja
+   *
+   * Eran ocho degradados planos que dibujaban cuatro corchetes en ángulo recto,
+   * y ahí estaba el fallo: la pieza no tiene la esquina en ángulo recto. La
+   * tiene achaflanada por el `corner-shape: bevel` de aquí arriba, o redondeada
+   * a `--modal-radius` donde eso no llega. Un corchete recto sobre una esquina
+   * cortada son dos siluetas distintas a 7 px una de otra.
+   *
+   * Ahora es **un contorno completo** con el mismo radio y la misma forma de
+   * esquina, del que la máscara sólo deja ver las cuatro esquinas. Sea cual sea
+   * la silueta —bisel o curva—, la escuadra la copia sola: no hay una segunda
+   * medida que mantener sincronizada.
+   *
+   * ## Las cuentas del radio
+   *
+   * `inset: 7px` se mide desde la caja de relleno, o sea 8 px desde el borde
+   * exterior contando el filete de 1 px. Dos contornos concéntricos separados
+   * 8 px llevan radios que se diferencian en 8: `--modal-radius` fuera, ocho
+   * menos dentro. Vale igual para el bisel, que es la misma esquina cortada en
+   * recto.
+   *
+   * ## Por qué la máscara y no cuatro trozos de borde
+   *
+   * `border-top-color` y compañía cortan en la bisectriz de la esquina, así que
+   * un corchete hecho con dos lados sale con el corte en diagonal y la esquina
+   * partida en dos tonos. La máscara recorta en cuadrado por fuera de la
+   * esquina y deja la curva o el bisel enteros.
+   *
+   * No cuesta un nodo: es el `::after` de la propia pieza. `pointer-events:
+   * none` lo deja fuera del camino del clic —en la tarjeta ese camino es el de
+   * `.detail-trigger`, que la cubre entera—.
+   *
+   * ## Quién pone el contexto de posicionamiento
+   *
+   * La clase **no** declara `position`. En el detalle la lleva un `<dialog>`
+   * modal, que ya es `fixed` por la hoja del navegador: escribirle `relative`
+   * encima lo sacaría de la capa superior. Cada pieza se encarga de garantizar
+   * su propio contenedor.
+   *
+   * ## Por qué el brazo crece
+   *
+   * A diferencia de la tarjeta, donde el encuadre es la respuesta al puntero y
+   * en reposo mide cero, aquí el panel ya es la respuesta: las escuadras se
+   * cierran alrededor al abrirse, como el visor del retrato del hero. El valor
+   * en reposo es el largo final; el arranque a cero lo pone el `@starting-style`
+   * de cada diálogo, para que quede junto al resto de su animación de entrada.
+   */
+  .project-list article,
+  .cards .card,
+  .detail {
+    --arm: 22px;
+    --wall: 2px;
+    --frame-ink: var(--accent);
+  }
+
+  .project-list article::after,
+  .cards .card::after,
+  .detail::after {
+    border: var(--wall) solid var(--frame-ink);
+    /* Dos contornos concéntricos separados 8 px llevan radios que se
+       diferencian en 8. La misma cuenta que la tarjeta. */
+    border-radius: calc(var(--modal-radius) - 8px);
+    content: "";
+    inset: 7px;
+    mask-image:
+      linear-gradient(#000, #000), linear-gradient(#000, #000),
+      linear-gradient(#000, #000), linear-gradient(#000, #000);
+    mask-position:
+      left top,
+      right top,
+      left bottom,
+      right bottom;
+    mask-repeat: no-repeat;
+    mask-size: var(--arm) var(--arm);
+    pointer-events: none;
+    position: absolute;
+    z-index: 2;
+    /* Sin `@supports`, a diferencia del bloque del bisel de aquí arriba: una
+       declaración suelta que el navegador no entiende la descarta él solo y se
+       queda el `border-radius`, que es justo el respaldo que se quiere. La
+       guarda sólo hace falta cuando hay que cambiar algo *más* en el caso sin
+       soporte. */
+    corner-shape: bevel;
+  }
+
+  /* `mask-size` sí es animable, y cambiar `--arm` lo recalcula: es el mismo
+     recurso con el que la tarjeta de proyecto abre sus escuadras al hover. */
+  @media (prefers-reduced-motion: no-preference) {
+    .project-list article::after,
+    .cards .card::after,
+    .detail::after {
+      transition: mask-size 0.24s ease;
+    }
+  }
+
+  /* El encuadre es decoración: en papel no encuadra nada, y en alto contraste
+     compite con el borde del propio panel. */
+  @media print, (prefers-contrast: more) {
+    .project-list article::after,
+    .cards .card::after,
+    .detail::after {
+      content: none;
+    }
+  }
+
+  /**
+   * El desplegable del sitio: `.job-details`.
+   *
+   * `<details>` nativo y no un botón con `aria-expanded`: el teclado, el rol y
+   * el estado ya vienen resueltos por el navegador, así que las secciones que
+   * lo usan siguen sin JavaScript propio. El marcador del navegador se oculta
+   * porque su triángulo no combina con el resto de controles.
+   *
+   * Vive aquí, y no en el `<style>` de `Experience.astro` donde nació, porque
+   * lo usan dos secciones —los puntos destacados de cada empleo y las trece
+   * certificaciones plegadas— y los estilos de componente en Astro van
+   * acotados: la clase no cruza de un archivo a otro. Es el mismo motivo por el
+   * que `.bar-control` y `.label-mono` están en este bloque.
+   *
+   * El nombre se queda como estaba a propósito: `printableDetails.ts` consulta
+   * `details.job-details` para forzar la apertura al imprimir en los
+   * navegadores que no entienden `::details-content`.
+   */
+  .job-details > summary {
+    align-items: center;
+    color: var(--text-subtle);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.85rem;
+    font-weight: 600;
+    gap: 0.4rem;
+    list-style: none;
+    /* Blanco de 32 px sin estirar la fila entera: el objetivo táctil lo da el
+       padding, no el ancho, para que el puntero no se encienda al pasar por el
+       hueco de la derecha. */
+    padding-block: 0.45rem;
+    transition: color 0.18s ease;
+    width: fit-content;
+  }
+
+  .job-details > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .job-details > summary .chevron {
+    color: var(--accent);
+    flex: 0 0 auto;
+    /* El giro va con el mismo chasquido que los controles y no con los 180 ms
+       en `ease` de antes: abrir un desplegable es pulsar algo. */
+    transition: rotate var(--tick);
+  }
+
+  .job-details[open] > summary .chevron {
+    rotate: 180deg;
+  }
+
+  .job-details[open] > summary {
+    margin-bottom: 0.5rem;
+  }
+
+  /**
+   * La variante con el botón al final: `.job-details--tail`.
+   *
+   * Un `<summary>` va siempre el primero, así que «Ver 13 más» quedaba encima
+   * de las cuatro filas visibles y, al abrirse, seguía ahí arriba diciendo «ver
+   * más» con las trece ya desplegadas. Dos cosas mal: el rótulo mentía y el
+   * botón estaba a trece filas de lo que acababa de aparecer.
+   *
+   * `column-reverse` sobre el `<details>` y no un botón con JS: el orden lo
+   * pinta el CSS y el estado, el teclado y el rol siguen siendo del navegador.
+   * Funciona con y sin `::details-content` —el motor que lo implementa mete un
+   * único hijo más, y el que no, los hijos reales—: en los dos casos el
+   * `<summary>` es el primero en el DOM y el último en la caja.
+   *
+   * Sólo cuando está abierto: cerrado no hay nada que reordenar, y `flex` sobre
+   * un `<details>` cerrado obliga a algunos motores a crear la caja del
+   * contenido antes de tiempo.
+   */
+  .job-details--tail[open] {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+
+  /* El hueco cambia de lado con el botón. */
+  .job-details--tail[open] > summary {
+    margin-bottom: 0;
+    margin-top: 0.5rem;
+  }
+
+  /* Los dos rótulos del pliegue viven los dos en el marcado y el CSS enseña el
+     que toca: sin JS no hay otra forma de que el texto acompañe al estado. */
+  .job-details > summary [data-fold-less],
+  .job-details[open] > summary [data-fold-more] {
+    display: none;
+  }
+
+  .job-details[open] > summary [data-fold-less] {
+    display: inline;
+  }
+
+  @media (hover: hover) {
+    .job-details > summary:hover {
+      color: var(--accent-strong);
+      text-shadow: 0 0 8px var(--glow-ink);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .job-details > summary,
+    .job-details > summary .chevron {
+      transition: none;
+    }
+  }
+
+  /* En papel no hay nada que desplegar: el PDF sale de este mismo `@media
+     print` —`scripts/build-cv-pdf.mjs` imprime con Chromium—, así que un
+     `<details>` cerrado dejaría el CV sin sus puntos destacados y sin trece de
+     los diecisiete certificados. `::details-content` es lo que fuerza el contenido a
+     la vista sin abrirlo; para los navegadores que aún no lo entienden,
+     `PortfolioRuntime.astro` abre los desplegables en `beforeprint` y los
+     devuelve a su sitio después. */
+  @media print {
+    .job-details > summary {
+      display: none;
+    }
+
+    .job-details::details-content {
+      content-visibility: visible;
+    }
+
+    /* Sin el `<summary>` no hay nada que reordenar, y una caja invertida dejaría
+       el bloque plegado por encima del que lo precede. */
+    .job-details--tail[open] {
+      display: block;
+    }
+  }
+
+  /**
+   * Pérdida de señal: el vocabulario compartido del sitio.
+   *
+   * Vive aquí por lo mismo que `.label-mono` y `.bar-control`: lo usan el
+   * titular y la ubicación del hero, el retrato y las transiciones de vista del
+   * tema y del idioma, y el CSS se incrusta tres veces.
+   *
+   * Reglas que cumple, todas del skill `motion-animations`:
+   *
+   * - **`steps()` y no una curva.** La referencia es un vídeo que se corta, no
+   *   algo que se desvanece: el salto seco es el efecto.
+   * - **Nunca `clip-path` sobre texto.** Recorta el elemento entero, así que en
+   *   ese fotograma la línea desaparece del todo en vez de perder una banda.
+   *   El desdoble se hace con `text-shadow`, que además no fuerza maquetación.
+   * - **Ningún fotograma deja el elemento invisible ni desplazado**: si la
+   *   animación no llegara a correr, el estado por defecto ya es el bueno.
+   *
+   * ## Por qué el ciclo es de 9 s y no de 420 ms
+   *
+   * La ráfaga dura lo mismo que siempre —420 ms— pero ya no la dispara el
+   * puntero: se repite sola. Eso choca de frente con el precedente escrito en
+   * `ServicesBanner.astro`, donde se quitaron dos animaciones perpetuas porque
+   * «un panel que parpadea solo compite con el contenido durante toda la
+   * visita». La forma de esta regla es la respuesta a esa objeción:
+   *
+   * - Los 420 ms de ruido van comprimidos en el primer **4,7 %** de un ciclo de
+   *   9 s. El otro 95 % son fotogramas idénticos en reposo.
+   * - `steps(1, end)` como temporización: entre fotograma y fotograma no se
+   *   interpola nada, así que durante esos 8,6 s de calma no hay ni un repintado
+   *   intermedio que calcular. Con una curva sí lo habría.
+   * - Y `text-shadow` sobre un puñado de líneas de texto, nunca sobre una capa
+   *   compuesta: no hay `filter` ni máscara en bucle.
+   *
+   * Los tres elementos que la llevan van desfasados con `animation-delay` (ver
+   * más abajo). Sincronizados se leía como «la página entera parpadea»; escalonados
+   * se lee como lo que quiere decir: que la señal es mala.
+   */
+  @keyframes signal-ghost-loop {
+    0%,
+    4.7%,
+    100% {
+      text-shadow: none;
+      translate: 0;
+    }
+
+    1.2% {
+      text-shadow:
+        -2px 0 var(--accent),
+        2px 0 var(--warning);
+      translate: 1px;
+    }
+
+    2.3% {
+      text-shadow:
+        2px 0 var(--warning),
+        -2px 0 var(--accent);
+      translate: -1px;
+    }
+
+    3.5% {
+      text-shadow:
+        -1px 0 var(--accent),
+        1px 0 var(--warning);
+      translate: 1px;
+    }
+  }
+
+  /**
+   * La misma caída para una página entera: el fotograma viejo de una View
+   * Transition, tanto al cambiar de tema como al cambiar de idioma.
+   *
+   * **No toca la opacidad**, y las dos veces por el mismo motivo. En el tema, la
+   * capa vieja se queda quieta y opaca mientras la nueva se revela con un
+   * círculo: bajarle la opacidad dejaría ver el tema entrante por fuera del
+   * círculo y el revelado perdería el sentido. En el idioma, la capa nueva
+   * conserva su fundido de entrada del navegador —sólo se sustituye la
+   * animación de la vieja—, así que la entrante aparece encima y la saliente no
+   * necesita irse por su cuenta.
+   *
+   * Empieza y acaba en `none`: si algo la interrumpe, no deja residuo.
+   */
+  @keyframes signal-flash {
+    0%,
+    100% {
+      filter: none;
+    }
+
+    33% {
+      filter: contrast(1.7) brightness(1.2) saturate(0.3);
+    }
+
+    66% {
+      filter: contrast(0.75) brightness(0.92);
+    }
+  }
+
+  /**
+   * Quién la lleva: el titular y la ubicación del hero, y nada más. La
+   * antetítulo del banner de servicios la llevó y se le quitó: aquel panel ya
+   * tiene el barrido de puntos, y dos efectos en una caja de dos líneas era
+   * ruido.
+   *
+   * Ya **no** hace falta puntero. Antes esto era `:hover` dentro de un
+   * `(hover: hover)`, así que en móvil —donde entra la mitad de la gente— el
+   * efecto no existía, y en escritorio sólo lo veía quien pasara por encima de
+   * un párrafo sin razón para hacerlo. Ahora corre solo y la consulta de medio
+   * se queda únicamente con `prefers-reduced-motion`.
+   *
+   * No se añade `tabindex` para poder enfocarlos: un `<p>` y un `<span>` no
+   * interactivos dentro del orden de tabulación siguen siendo un antipatrón, y
+   * el efecto no comunica nada que el texto no diga ya.
+   *
+   * El retardo separa las dos ráfagas en vez de dispararlas a la vez, y va en
+   * negativo para que el desfase valga desde el primer fotograma en lugar de
+   * tras la primera vuelta.
+   *
+   * Se nombra la pieza en vez de usar `:nth-of-type()`: el titular es un `<p>` y
+   * la ubicación un `<span>`, así que ese selector los contaría por separado y
+   * los dos saldrían como el primero de su tipo.
+   */
+  @media screen and (prefers-reduced-motion: no-preference) {
+    .signal-text {
+      animation: signal-ghost-loop 9s steps(1, end) infinite;
+    }
+
+    .location.signal-text {
+      animation-delay: -3.1s;
+    }
+  }
+
+  /**
+   * La navegación entre páginas: el fundido nativo entre documentos.
+   *
+   * Lo hacía `<ClientRouter />` hasta el 02-10-2026, con JS y sustituyendo el
+   * documento. Ahora cada página es una carga normal y el navegador funde la
+   * vieja con la nueva por su cuenta: Chrome, Edge y Safari 18.2 en adelante.
+   * Firefox navega sin fundido, que es lo mismo que haría con el movimiento
+   * reducido, y por eso la regla vive dentro de esa consulta.
+   */
+  @media screen and (prefers-reduced-motion: no-preference) {
+    @view-transition {
+      navigation: auto;
+    }
+  }
+
+  /**
+   * Cambio de idioma: la página saliente pierde la señal antes de irse.
+   *
+   * Acotado por `[data-signal="locale"]`. Sin esa marca, *toda* navegación
+   * parpadearía —la landing de servicios, el atrás del navegador—, y ahí sería
+   * ruido: el efecto dice «has cambiado de canal», no «has navegado».
+   *
+   * La marca la pone la página **nueva**, porque en una transición entre
+   * documentos es ella la que pinta las dos capas: el conmutador deja el
+   * destino en `sessionStorage` al pulsar (`UtilityBarRuntime.astro`) y un
+   * guion en línea del `<head>` la convierte en el atributo antes del primer
+   * pintado, y la quita al acabar la transición.
+   *
+   * El cambio de tema tiene el suyo en `ThemeToggle.astro`, con otra curva:
+   * allí la capa vieja debe seguir opaca.
+   */
+  @media screen and (prefers-reduced-motion: no-preference) {
+    :root[data-signal="locale"]::view-transition-old(root) {
+      animation: signal-flash 220ms steps(4, end) 1;
+    }
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .print {
+    display: none !important;
+  }
+
+  @media (width <= 700px) {
+    .utility-bar {
+      padding: 0.65rem 1rem 0;
+    }
+  }
+
+  /**
+   * Una fila, no dos.
+   *
+   * Aquí vivía el remedio contrario: con nueve celdas —tres de idioma y seis de
+   * vista— la fila no cabía en un móvil, así que se dejaba envolver en dos
+   * filas. Funcionaba, pero costaba 102 px de alto justo encima del hero, que es
+   * lo primero que se ve en un teléfono, y la segunda fila se leía como un
+   * segundo panel y no como la continuación del primero.
+   *
+   * Apretar no bastaba con nueve celdas, y la cuenta está en `barMenus.ts`. Hoy
+   * son tres —el disparador de idioma, el PDF y el tema—: desde el 06-10-2026 no
+   * hay vistas que recoger tras un «⋯», y la fila cabe en el suelo de 320 px.
+   * Los 44 px de cada celda no se tocan: es el tamaño de destino mínimo (WCAG
+   * 2.5.8) y éste es el único sitio del sitio donde se navega con el dedo.
+   *
+   * El idioma se recoge a un botón por debajo de 700 px y ahí se queda: sus
+   * tres celdas son 130 px que no sobran en ningún teléfono.
+   *
+   * ## Y una sola caja, no dos
+   *
+   * En escritorio los dos grupos van en cajas separadas a propósito: el idioma
+   * cambia el documento y las vistas cambian cómo se mira, y ese hueco de medio
+   * rem es lo que lo dice. En un móvil esa distinción se paga demasiado cara —el
+   * `ES` quedaba flotando solo en su marco, al lado de una caja con los otros
+   * tres, y se leía como una pieza suelta que se hubiera caído de la barra—.
+   *
+   * Aquí la caja pasa al envoltorio y los dos grupos se quedan sin la suya, así
+   * que los botones se leen como lo que son a este ancho: una fila. El marcado
+   * no cambia; sólo dónde se dibuja el marco.
+   *
+   * `flex-wrap` se queda por si acaso: si algún día vuelve a no caber, la fila se
+   * parte antes que salirse por el borde izquierdo, que es como fallaba antes
+   * —con el botón de la paleta cortado contra el canto de la pantalla—.
+   */
+  @media (width <= 700px) {
+    .utility-bar__content {
+      flex-wrap: wrap;
+    }
+
+    .control-groups {
+      background-color: color-mix(
+        in srgb,
+        var(--surface-raised) 88%,
+        transparent
+      );
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      border-radius: 4px;
+      box-shadow: var(--shadow-raised);
+      flex-wrap: wrap;
+      gap: 0.15rem;
+      justify-content: flex-end;
+      max-inline-size: 100%;
+      padding: 0.15rem;
+    }
+
+    .control-group--locale,
+    .control-group--view {
+      background: none;
+      border: 0;
+      box-shadow: none;
+      flex-wrap: wrap;
+      gap: 0.15rem;
+      justify-content: flex-end;
+      padding: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .control-groups,
+    .control-group {
+      transition: none;
+    }
+  }
+
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+
+    .print {
+      display: block !important;
+    }
+
+    /**
+     * La hoja tiene su propia paleta, y se decide **aquí**, en los tokens.
+     *
+     * Antes el papel se forzaba con `background: #fff` sobre `html` y `body` y
+     * cada componente apagaba su superficie por su cuenta. Eso dejaba dos
+     * problemas: el PDF dependía del tema del sistema de quien lo generaba, y
+     * cualquier token de color seguía resolviendo a su valor de pantalla.
+     *
+     * `color-scheme: light` es la pieza central: todos los tokens se declaran
+     * con `light-dark()`, así que fijarlo resuelve la paleta entera en claro sin
+     * repetir un solo color. Lo que queda debajo son los cambios que el papel sí
+     * necesita: superficies en blanco puro, filete algo más marcado —el gris de
+     * pantalla desaparece al imprimir— y todo lo que es cristal, sombra o brillo
+     * anulado.
+     */
+    :root {
+      color-scheme: light;
+      --bg: #ffffff;
+      --surface: #ffffff;
+      --surface-raised: #ffffff;
+      --border: #cfd6d0;
+    }
+
+    /**
+     * El perfil `focused`: qué se cae del PDF para que quepa en una A4.
+     *
+     * De los siete proyectos van tres. Los certificados **ya no desaparecen
+     * enteros**: se caía la sección completa —diecisiete filas y su resumen— y
+     * con ella diecisiete títulos de curso que un filtro de empleo busca por
+     * nombre. Lo que se cae ahora es la lista; en su lugar queda un renglón de
+     * texto con los cuatro destacados, igual que hacen las tecnologías. Ver
+     * `.pdf-focused-certs` en `Certifications.astro`.
+     */
+    :root[data-pdf-profile="focused"] .certificate-list,
+    :root[data-pdf-profile="focused"] .cert-details,
+    :root[data-pdf-profile="focused"] .cert-summary,
+    :root[data-pdf-profile="focused"]
+      .project-list
+      > li:not(
+        [data-project-id="race-hub"],
+        [data-project-id="strava-garmin-platform"],
+        [data-project-id="100-cims"]
+      ) {
+      display: none;
+    }
+
+    /* El acento se sortea en cada carga, así que sin esto cada PDF salía de un
+       color. Se fija el de la paleta base —«ocean»—, y con el atributo en el
+       selector para ganar a `:root[data-accent="…"]`, que es más específico. */
+    :root,
+    :root[data-accent] {
+      --accent-light: #245f91;
+      --accent-light-strong: #184a73;
+      --accent-light-soft: #e2edf6;
+      --focus-ring-light: #256b9f;
+    }
+
+    /* Una sola fuente para los márgenes: el diálogo del navegador y
+       `scripts/build-cv-pdf.mjs` —que va con `preferCSSPageSize`— imprimen la
+       misma caja. */
+    @page {
+      size: A4;
+      margin: 9mm 10mm;
+    }
+
+    html,
+    body {
+      background: #ffffff;
+      color: var(--text);
+    }
+
+    /* 9,6 pt: conserva una lectura cómoda y permite que el resumen y la
+       experiencia revisados entren con las secciones de datos en una sola A4
+       en los tres idiomas. */
+    html {
+      font-size: 12.75px;
+    }
+
+    /* Cristal, neón y sombras son de pantalla: en papel imprimen manchas
+       grises. El `backdrop-filter` además obliga al navegador a rasterizar la
+       capa, y esa trama acababa incrustada en el PDF como una imagen JPEG. */
+    * {
+      backdrop-filter: none !important;
+      box-shadow: none !important;
+      filter: none !important;
+      mask-image: none !important;
+      text-shadow: none !important;
+    }
+
+    /**
+     * Lo que se anima al entrar tiene que aparecer sí o sí.
+     *
+     * `revealSequence` (PortfolioRuntime) lleva estos elementos de
+     * `opacity: 0` a 1 con la Web Animations API. En papel no hay tiempo de
+     * animación: el titular y la ubicación salían en blanco —presentes en la
+     * capa de texto del PDF, invisibles a la vista—. Una animación en curso
+     * gana a cualquier declaración normal; sólo `!important` le gana a ella.
+     */
+    .headline,
+    .location,
+    .contact-list {
+      opacity: 1 !important;
+      translate: none !important;
+      transform: none !important;
+    }
+
+    /**
+     * Identidad que **no** es decoración: las barras de sección, los estados de
+     * proyecto y el retrato. Van con `print-color-adjust: exact` para que
+     * sobrevivan también al diálogo del navegador, donde «gráficos de fondo»
+     * suele venir desmarcado y el CV se quedaría sin marcadores.
+     */
+    .section-rule,
+    .status,
+    .status::before,
+    .portrait,
+    .portrait-image {
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    article {
+      break-inside: avoid;
+    }
+
+    section {
+      break-inside: avoid;
+    }
+  }
+</style>
