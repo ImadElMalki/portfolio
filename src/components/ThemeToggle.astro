@@ -1,0 +1,238 @@
+---
+/**
+ * Botón para alternar entre modo claro y oscuro.
+ * Usa window.theme expuesto por ThemeManager.astro (debe estar en el layout).
+ */
+import type { Locale } from "@/cv"
+import { t } from "@/lib/i18n"
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+---
+
+<button
+  type="button"
+  class="bar-control theme-toggle"
+  aria-label={t(locale, "darkMode")}
+  aria-pressed="false"
+  title={t(locale, "switchToDark")}
+  data-theme-toggle
+  data-label-dark={t(locale, "switchToDark")}
+  data-label-light={t(locale, "switchToLight")}
+>
+  {
+    /* Un interruptor y no un icono que cambia.
+       El sol y la luna decían el destino con un dibujo; un raíl con perilla dice
+       además en cuál de los dos estados está, que es lo que hace un mando de
+       verdad. El nombre accesible sigue en el `aria-label` del botón —el raíl es
+       `aria-hidden`—, así que para el lector de pantalla no cambia nada. */
+  }
+  <span class="switch-rail" aria-hidden="true">
+    <span class="switch-knob"></span>
+  </span>
+</button>
+
+<!-- El JS de todos los controles de la barra vive en `UtilityBarRuntime.astro`,
+     que monta `Layout.astro` junto a la barra. -->
+
+<style>
+  /**
+   * La celda deja de ser cuadrada.
+   *
+   * Un raíl con perilla necesita ancho: a 44 px el recorrido de la perilla eran
+   * ocho, y ocho píxeles de viaje no se leen como un mando que se mueve. A 64 el
+   * raíl mide 34 y la perilla recorre 16, que ya es un gesto. El alto se queda
+   * en los 44 de `.bar-control`: la fila no cambia de altura.
+   */
+  .theme-toggle {
+    flex: 0 0 64px;
+    width: 64px;
+    height: 44px;
+    padding: 0;
+  }
+
+  .theme-toggle:disabled {
+    cursor: wait;
+    opacity: 0.72;
+  }
+
+  /**
+   * El raíl y la perilla.
+   *
+   * Píldora, que es la única forma redonda que el sistema admite fuera de los
+   * pilotos: un interruptor **es** una píldora, y dibujarlo con el radio de 4 px
+   * de las celdas lo convertiría en otra celda dentro de la celda.
+   *
+   * El filete va en `--border-control`, el tono que el sitio reserva para el
+   * contorno de un mando —3:1 por la WCAG 1.4.11—, y no en `--border`: aquí el
+   * borde no separa dos superficies, dice dónde está el recorrido.
+   */
+  .switch-rail {
+    align-items: center;
+    block-size: 16px;
+    border: 1px solid var(--border-control);
+    border-radius: 999px;
+    display: inline-flex;
+    inline-size: 34px;
+    padding: 0 2px;
+  }
+
+  /**
+   * En claro la perilla es el tono apagado del texto y en oscuro el acento.
+   *
+   * No es decoración: el acento marca el estado activo en toda la barra —el
+   * piloto de cada celda, el segmento del índice—, y aquí el estado activo es el
+   * tema oscuro, que es el que hay que pulsar para salir. El `var(--tick)` es
+   * el chasquido de 90 ms de todos los controles: un interruptor no se desliza,
+   * salta.
+   */
+  .switch-knob {
+    background: var(--text-muted);
+    block-size: 12px;
+    border-radius: 999px;
+    inline-size: 12px;
+    transition:
+      background-color 180ms ease,
+      box-shadow 220ms ease,
+      translate var(--tick);
+    translate: 0;
+  }
+
+  .theme-toggle[aria-pressed="true"] .switch-knob {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--glow-ink);
+    translate: 16px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .switch-knob {
+      transition: none;
+    }
+  }
+
+  @media print {
+    .theme-toggle {
+      display: none !important;
+    }
+  }
+</style>
+
+<style is:global>
+  :root {
+    --theme-expo-out: linear(
+      0 0%,
+      0.1684 2.66%,
+      0.3165 5.49%,
+      0.446 8.52%,
+      0.5581 11.78%,
+      0.6535 15.29%,
+      0.7341 19.11%,
+      0.8011 23.3%,
+      0.8557 27.93%,
+      0.8962 32.68%,
+      0.9283 38.01%,
+      0.9529 44.08%,
+      0.9711 51.14%,
+      0.9833 59.06%,
+      0.9915 68.74%,
+      1 100%
+    );
+  }
+
+  :root.theme-transitioning,
+  :root.theme-transitioning *,
+  :root.theme-transitioning *::before,
+  :root.theme-transitioning *::after {
+    transition: none !important;
+  }
+
+  /* Los cuatro bloques van acotados por `.theme-transitioning`, la clase que el
+     script de arriba pone y quita alrededor del cambio de tema.
+
+     Sin esa guardia se aplicarían a **cualquier** View Transition, y la
+     navegación entre páginas usa esos mismos pseudoelementos —la transición
+     nativa entre documentos—: `animation: none` sobre `::view-transition-old`
+     y `-new` dejaba el cambio de idioma sin transición y con un salto seco.
+     Son dos transiciones distintas que comparten el pseudoelemento raíz. */
+  /* Todo en porcentajes, centro incluido: Chrome Android resuelve los px
+     absolutos de esta `clip-path` en píxeles de dispositivo y con dpr 4 el
+     círculo salía a un cuarto de tamaño y descentrado (ver `themeToggle.ts`).
+
+     150 % y no un radio calculado: el porcentaje de un `circle()` se resuelve
+     contra la diagonal de la caja partida por √2, así que 141,4 % cubre desde
+     cualquier esquina hacia la opuesta sea cual sea el viewport. */
+  @keyframes theme-reveal {
+    from {
+      clip-path: circle(0% at var(--theme-reveal-x) var(--theme-reveal-y));
+    }
+
+    to {
+      clip-path: circle(150% at var(--theme-reveal-x) var(--theme-reveal-y));
+    }
+  }
+
+  :root.theme-transitioning::view-transition-image-pair(root) {
+    isolation: isolate;
+  }
+
+  /**
+   * El tema anterior queda fijo y el nuevo conduce la revelación desde CSS.
+   * Safari/iOS puede descartar la transición; el controlador detecta ese caso
+   * y anima el documento real como fallback.
+   *
+   * Lo único que hace la capa vieja es perder la señal un instante:
+   * `signal-flash` (en `Layout.astro`) sólo toca `filter`, nunca la opacidad,
+   * porque esta capa tiene que seguir opaca por fuera del círculo del revelado.
+   * Dura menos que el revelado a propósito: la señal se va al principio del
+   * cambio y ya se ha recuperado cuando el círculo llega al borde.
+   */
+  :root.theme-transitioning::view-transition-old(root) {
+    z-index: 1;
+    animation: signal-flash 200ms steps(4, end) 1;
+    mix-blend-mode: normal;
+  }
+
+  /* Longhands y no el atajo `animation`: si el navegador no entiende `linear()`
+     —WebView de Android, Samsung Internet, Chrome < 113— el `var()` invalida el
+     atajo **entero** en tiempo de valor calculado y `animation-name` vuelve a
+     `none`, o sea revelado cero y cambio seco. Así lo único que se pierde es la
+     curva, que cae en la cúbica de siempre. */
+  :root.theme-transitioning::view-transition-new(root) {
+    z-index: 2;
+    animation-name: theme-reveal;
+    /* 420 y no 650: con la curva expo el tramo final se arrastra, y el cambio de
+       tema es una respuesta a un botón, no una escena. */
+    animation-duration: 420ms;
+    animation-fill-mode: both;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    mix-blend-mode: normal;
+  }
+
+  @supports (animation-timing-function: linear(0 0%, 1 100%)) {
+    :root.theme-transitioning::view-transition-new(root) {
+      animation-timing-function: var(--theme-expo-out);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root.theme-transitioning::view-transition-new(root) {
+      animation-name: none;
+    }
+
+    :root.theme-transitioning::view-transition-old(root) {
+      animation-name: none;
+    }
+  }
+
+  /* En más contraste el parpadeo sobra por lo mismo que los halos: el cambio de
+     tema ya se nota, y bajar el contraste durante 200 ms es lo contrario de lo
+     que se ha pedido. */
+  @media (prefers-contrast: more) {
+    :root.theme-transitioning::view-transition-old(root) {
+      animation-name: none;
+    }
+  }
+</style>

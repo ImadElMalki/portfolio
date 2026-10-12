@@ -1,0 +1,260 @@
+---
+import Layout from "@/layouts/Layout.astro"
+import Section from "@/components/Section.astro"
+import ChevronLeft from "@/icons/chevron-left.astro"
+import { getCv, type Locale, type Localized } from "@/cv"
+import { ABOUT_COPY } from "@/data/about"
+import { localized, localizedPath, t } from "@/lib/i18n"
+import { publicPageHrefs } from "@/lib/publicPages"
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+const cv = await getCv()
+const say = (field: Localized) => localized(field, locale)
+const copy = ABOUT_COPY
+---
+
+<Layout
+  cv={cv}
+  locale={locale}
+  localeHrefs={publicPageHrefs("about")}
+  title={`${say(copy.pageTitle)} · ${cv.basics.name}`}
+  description={say(copy.pageDescription)}
+  currentPage="about"
+>
+  <main id="main" class="about-page" data-about-page>
+    <div class="lead-block">
+      {
+        /**
+         * La salida, lo primero que se lee.
+         *
+         * Estuvo debajo del párrafo de entrada, o sea después del titular y de
+         * la intro: una flecha hacia atrás colocada donde el ojo espera el paso
+         * siguiente. Arriba del todo se lee en el orden en que sirve.
+         *
+         * Y con texto. Era un cuadrado de 44 px con el chevrón apagado y sin
+         * halo —el único control del sitio sin él—, que es exactamente el
+         * patrón que el diálogo de proyecto ya descartó por ser «el control con
+         * menos contraste» y no ganar nunca el hover en táctil. Los corchetes y
+         * las versalitas mono son los del `[ LEER SOBRE MÍ ]` que trae hasta
+         * aquí: entrar y salir se dicen igual.
+         *
+         * Sin `aria-label` ni `title`: el nombre accesible lo da el texto, y
+         * repetirlo al posarse encima es ruido.
+         */
+      }
+      <a
+        class="bracket-link back-link"
+        href={localizedPath(locale)}
+        data-about-back
+      >
+        <span class="bracket-link__bracket" aria-hidden="true">[</span>
+        <span class="bracket-link__icon" aria-hidden="true">
+          <ChevronLeft />
+        </span>
+        <span>{t(locale, "backToPortfolio")}</span>
+        <span class="bracket-link__bracket" aria-hidden="true">]</span>
+      </a>
+      <p class="eyebrow label-mono">{say(copy.eyebrow)}</p>
+      <h1>{say(copy.headline)}</h1>
+      <p class="lead">{say(copy.intro)}</p>
+    </div>
+
+    <div class="story">
+      {
+        copy.sections.map((section) => (
+          <div class="story-section" data-about-section>
+            <Section id={`about-${section.id}`} title={say(section.title)}>
+              <div class="story-copy">
+                {section.paragraphs.map((paragraph) => (
+                  <p>{say(paragraph)}</p>
+                ))}
+              </div>
+            </Section>
+          </div>
+        ))
+      }
+    </div>
+
+    <section class="closing" aria-labelledby="about-closing-title">
+      <p class="closing-label label-mono">{say(copy.pageTitle)}</p>
+      <h2 id="about-closing-title">{say(copy.closingTitle)}</h2>
+      <p>{say(copy.closingBody)}</p>
+      <div class="actions">
+        <a
+          class="action action-primary"
+          href={`${localizedPath(locale)}#projects`}
+          data-about-projects
+        >
+          {say(copy.projectsLabel)}
+        </a>
+        <a
+          class="action"
+          href={`${localizedPath(locale)}#contact`}
+          data-about-contact
+        >
+          {say(copy.contactLabel)}
+        </a>
+      </div>
+    </section>
+  </main>
+</Layout>
+
+<style>
+  .about-page {
+    margin: 0 auto;
+    min-width: 0;
+    padding: clamp(2.25rem, 5vw, 4.75rem) clamp(1.25rem, 5vw, 3rem)
+      clamp(4rem, 8vw, 7rem);
+    width: min(100%, calc(var(--page-width) + 6rem));
+  }
+
+  .lead-block,
+  .story,
+  .closing {
+    margin-inline: auto;
+    width: min(100%, var(--page-width));
+  }
+
+  .lead-block {
+    margin-bottom: clamp(3.75rem, 8vw, 6.5rem);
+  }
+
+  .eyebrow,
+  .closing-label {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  h1 {
+    color: var(--text);
+    font-size: clamp(2.25rem, 5.8vw, 3.75rem);
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    line-height: 1.03;
+    margin-top: 0.8rem;
+    max-width: 24ch;
+    text-wrap: balance;
+  }
+
+  .lead {
+    color: var(--text-subtle);
+    font-size: clamp(1.05rem, 2vw, 1.22rem);
+    line-height: 1.65;
+    margin-top: 1.25rem;
+    max-width: 62ch;
+    text-wrap: pretty;
+  }
+
+  /* La caja la pone `.bracket-link` en `Layout.astro`, que es donde vive el
+     control compartido por las tres landings y la portada. Aquí sólo queda el
+     hueco que lo separa de lo que viene debajo. */
+  .back-link {
+    margin-bottom: 1.75rem;
+  }
+
+  .story-section :global(section) {
+    margin-bottom: clamp(3rem, 6vw, 4.75rem);
+  }
+
+  .story-copy {
+    display: grid;
+    gap: 1rem;
+    max-width: 76ch;
+  }
+
+  .story-copy p,
+  .closing > p:not(.closing-label) {
+    color: var(--text-muted);
+    font-size: clamp(1rem, 1.6vw, 1.075rem);
+    line-height: 1.78;
+    text-wrap: pretty;
+  }
+
+  .closing {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    box-shadow: var(--shadow);
+    padding: clamp(1.5rem, 4vw, 2.25rem);
+  }
+
+  .closing h2 {
+    color: var(--text);
+    font-size: clamp(1.45rem, 3vw, 2rem);
+    letter-spacing: -0.035em;
+    margin-top: 0.55rem;
+  }
+
+  .closing > p:not(.closing-label) {
+    margin-top: 0.8rem;
+    max-width: 68ch;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-top: 1.35rem;
+  }
+
+  .action {
+    align-items: center;
+    background: var(--surface-raised);
+    border: 1px solid var(--border-control);
+    border-radius: 4px;
+    color: var(--text);
+    display: inline-flex;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    min-height: 44px;
+    padding: 0.65rem 1rem;
+    text-transform: uppercase;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease;
+  }
+
+  .action-primary {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--bg);
+  }
+
+  @media (hover: hover) {
+    .action:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-hover);
+    }
+
+    .action-primary:hover {
+      background: var(--text);
+      border-color: var(--accent);
+      color: var(--bg);
+    }
+  }
+
+  @media (width <= 480px) {
+    .actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .action {
+      justify-content: center;
+      width: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .action {
+      transition: none;
+    }
+  }
+</style>

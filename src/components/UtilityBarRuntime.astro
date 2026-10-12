@@ -1,0 +1,184 @@
+---
+/**
+ * El JS de la barra de utilidades, sin marcado propio.
+ *
+ * Vivía dentro de `ThemeToggle.astro`, que es sólo uno de los controles que
+ * hay dentro de la barra: el plegado del idioma y el reloj no son suyos, y
+ * quitar o renombrar el botón de tema los mataba en silencio. La barra la pinta
+ * `Layout.astro`, así que su runtime se monta desde ahí también.
+ *
+ * Un solo componente y no uno por control: Astro emite un chunk por `<script>`,
+ * y el presupuesto de JS del build va contado.
+ */
+---
+
+<script>
+  import { mountAskDock } from "@/lib/askDock"
+  import { mountBarMenus } from "@/lib/barMenus"
+  import { mountBootSequence } from "@/lib/bootSequence"
+  import { mountHits } from "@/lib/hits"
+  import { mountLocaleSuggest } from "@/lib/localeSuggest"
+  import { pulseGlyph } from "@/lib/glyph"
+  import { mountAll, onPageLoad } from "@/lib/pageLifecycle"
+  import { mountThemeToggle } from "@/lib/themeToggle"
+
+  onPageLoad((signal) => {
+    /* Uno a uno y con red: `mountAll` atrapa el que falle para que un control
+       roto no se lleve a los demás —antes, una excepción de la paleta dejaba
+       sin contador, sin reloj y sin acuse de idioma a la vez—. Ver
+       `pageLifecycle.ts`. */
+    mountAll(signal, [
+      ["theme-toggle", mountThemeToggle],
+      /* El plegado del idioma, el único de la barra desde que las vistas se
+         fueron con su «⋯» el 06-10-2026. Aquí hubo además un `mountUtilityBar`
+         que plegaba la barra entera al bajar; se fue con la barra pegajosa. */
+      ["bar-menus", mountBarMenus],
+      ["boot-sequence", mountBootSequence],
+      /* El asistente se monta aquí y no en `PortfolioRuntime`: era una barra
+         dentro del hero, o sea sólo la portada, y ahora es un panel que se abre
+         encima de cualquier página. Quien aprende a preguntar en el portfolio lo
+         intenta en «Sobre mí», y que allí no hubiera nada era la peor respuesta
+         posible. Ver `AskDock.astro`. */
+      ["ask-dock", mountAskDock],
+      /* Aquí y no en `PortfolioRuntime` por lo mismo que el asistente: esto va
+         en todas las páginas, y contar sólo la portada no contestaría a la pregunta
+         de si la landing de servicios recibe visitas. */
+      ["hits", mountHits],
+      /* El aviso de idioma. Va detrás de `bar-menus` a propósito: se ata a los
+         `[data-language-link]` para darse por respondido cuando alguien elige
+         idioma a mano, y los del conmutador tienen que estar ya en el documento
+         —lo están, es marcado del servidor—. */
+      ["locale-suggest", mountLocaleSuggest],
+      ["bar-wiring", mountBarWiring],
+    ])
+  })
+
+  /**
+   * El cableado que no es de nadie más: los enlaces de idioma, el reloj y el
+   * cronómetro del pie, la tira Glyph y el acuse del cambio de idioma.
+   *
+   * Sale del cuerpo de `onPageLoad` para poder entrar en `mountAll` como un
+   * montaje más: mientras estaba suelto ahí dentro, una excepción suya no la
+   * atrapaba nadie —y una excepción de los de arriba impedía que llegara a
+   * ejecutarse—.
+   */
+  function mountBarWiring(signal: AbortSignal): void {
+    const links = document.querySelectorAll<HTMLAnchorElement>(
+      "[data-language-link]",
+    )
+    /**
+     * La hora del rótulo y el tiempo de encendido del pie.
+     *
+     * Los dos van a un segundo, así que comparten intervalo: dos temporizadores
+     * para la misma cadencia serían dos despertares del hilo por segundo para
+     * escribir dos cadenas.
+     *
+     * Sin `Intl.DateTimeFormat`: aquí no hay formato local que respetar —son
+     * seis cifras y dos puntos— y el constructor arrastra bastante más que un
+     * `padStart`. El intervalo se suelta con el `signal`.
+     */
+    const clock = document.querySelector<HTMLElement>("[data-bar-clock]")
+    const uptime = document.querySelector<HTMLElement>("[data-footer-uptime]")
+
+    /**
+     * Cuándo se encendió el aparato: al llegar a la primera página de la
+     * pestaña, no a ésta. Lo que mide el pie es cuánto lleva encendido, no
+     * cuánto lleva puesta esta página.
+     *
+     * Con `<ClientRouter />` bastaba `performance.now()`: el documento era el
+     * mismo toda la visita. Desde el 02-10-2026 cada página es un documento
+     * nuevo con su propio origen de tiempos, así que el primero se guarda en
+     * `sessionStorage`. Sin almacenamiento cuenta desde esta página.
+     */
+    const poweredOn = (() => {
+      const key = "portfolio-powered-on"
+      try {
+        const stored = Number(window.sessionStorage.getItem(key))
+        if (stored > 0 && stored <= Date.now()) return stored
+        window.sessionStorage.setItem(key, String(performance.timeOrigin))
+      } catch {
+        // Sin almacenamiento, el encendido es esta página.
+      }
+      return performance.timeOrigin
+    })()
+
+    if (clock || uptime) {
+      const pad = (value: number) => String(value).padStart(2, "0")
+      const tick = () => {
+        if (clock) {
+          const now = new Date()
+          clock.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+        }
+
+        if (uptime) {
+          const elapsed = Math.max(
+            0,
+            Math.floor((Date.now() - poweredOn) / 1000),
+          )
+          const hours = Math.floor(elapsed / 3600)
+          const minutes = Math.floor((elapsed % 3600) / 60)
+          uptime.textContent = `UPTIME ${pad(hours)}:${pad(minutes)}:${pad(elapsed % 60)}`
+        }
+      }
+
+      tick()
+      const id = window.setInterval(tick, 1000)
+      signal.addEventListener("abort", () => window.clearInterval(id))
+    }
+
+    /**
+     * La hora de la barra enciende la tira Glyph.
+     *
+     * Estuvo en el punto y coma del pie hasta que ése se fue. La hora es mejor
+     * sitio: es el único dato vivo del panel, así que un aparato respondería
+     * justo ahí. El espectáculo largo se queda para este gesto, que es el único
+     * que alguien hace a propósito; el resto del sitio acusa con `pulse`.
+     */
+    const glyphMark = document.querySelector("[data-glyph-easter]")
+    glyphMark?.addEventListener("click", () => pulseGlyph("show"), { signal })
+
+    /**
+     * La tira acusa el cambio de idioma, no el de página.
+     *
+     * Cada página nueva relanza `glyph-boot` por su cuenta, así que cambiar de
+     * idioma encendería la tira igual que volver atrás o abrir los servicios.
+     * `data-arrival` lo distingue: lo pone el guion en línea del `<head>` al
+     * llegar desde el conmutador (ver `Layout.astro`), y la pasada sustituye
+     * al arranque genérico.
+     */
+    if (document.documentElement.dataset.arrival === "locale") {
+      pulseGlyph("pulse")
+    }
+
+    /**
+     * Marca de «esta navegación es un cambio de idioma».
+     *
+     * La caída de señal sólo tiene sentido aquí: en la landing de servicios o
+     * al volver atrás, un parpadeo sería ruido. Y en una transición entre
+     * documentos las dos capas las pinta la página **nueva**, así que la marca
+     * no puede quedarse en este `<html>`: viaja en `sessionStorage`, con el
+     * destino y la hora para que el guion del `<head>` de la página que llega
+     * sepa que es para ella. Sin almacenamiento, no hay fogonazo; la
+     * navegación es la misma.
+     */
+    for (const link of links) {
+      link.addEventListener(
+        "click",
+        () => {
+          try {
+            window.sessionStorage.setItem(
+              "portfolio-signal",
+              JSON.stringify({
+                to: new URL(link.href).pathname,
+                at: Date.now(),
+              }),
+            )
+          } catch {
+            // Sin almacenamiento se navega igual, sólo que sin el fogonazo.
+          }
+        },
+        { signal },
+      )
+    }
+  }
+</script>

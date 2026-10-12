@@ -1,0 +1,1064 @@
+---
+/**
+ * El guion del diálogo de proyecto, compartido por la portada y el índice.
+ *
+ * Vivía dentro de `sections/Projects.astro`, y Astro sólo empaqueta el `<script>`
+ * de un componente en las páginas que lo incluyen: como `Projects` sólo entra en
+ * la portada, `/proyectos/` se quedaba sin nada que pudiera abrir un diálogo y su
+ * «Ver ficha completa» tenía que navegar a la ficha suelta.
+ *
+ * Aquí está **tal cual estaba**, sin una línea reescrita: el traslado ya era
+ * bastante superficie como para además aprovechar y tocarlo por dentro. Sigue el
+ * patrón de `PortfolioRuntime`, `ServicesRuntime` y `UtilityBarRuntime`.
+ *
+ * Lo que necesita de la página que lo incluya:
+ *
+ * - una lista con `data-project-details`, que además lleve `data-project-details-url`
+ *   y los rótulos `data-previous-project` / `data-next-project`;
+ * - disparadores con `data-detail-open="project-<id>"`;
+ * - un `<main>` donde colgar los diálogos que se trae.
+ *
+ * La hoja de los diálogos no hace falta en la página: viaja con la ficha y el
+ * guion la adopta al traérsela (ver `adoptStylesheets`).
+ */
+---
+
+<script>
+  import { onPageLoad } from "@/lib/pageLifecycle"
+
+  /**
+   * El clic que el navegador ya sabe atender mejor que nosotros.
+   *
+   * Los disparadores son `<a>` de verdad hacia `/proyectos/<id>/`, así que
+   * Ctrl/Cmd+clic significa «ábremelo en otra pestaña» y Mayús «en otra
+   * ventana». Hasta el 11-09-2026 el `preventDefault()` era incondicional y se
+   * comía las tres: el diálogo se abría igual y la pestaña nueva no llegaba
+   * nunca. El clic central no lo sufría, pero de carambola —dispara `auxclick`,
+   * que aquí no escucha nadie—.
+   */
+  const opensElsewhere = (event: MouseEvent): boolean =>
+    event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
+
+  onPageLoad((signal) => {
+    let initialized = false
+
+    const initialize = (): void => {
+      if (initialized || signal.aborted) return
+      initialized = true
+      const dialogs = document.querySelectorAll<HTMLDialogElement>(
+        "dialog[data-detail]",
+      )
+      const lightboxes = document.querySelectorAll<HTMLDialogElement>(
+        "dialog[data-lightbox]",
+      )
+
+      /**
+       * Los diálogos salen de las secciones, al final de `<main>`.
+       *
+       * Nació por la vista rápida, que también los abría con la web en
+       * `display: none`: un `showModal()` dentro de un ancestro escondido pone el
+       * diálogo en la capa superior y no pinta **nada**. Desde el 06-10-2026 no
+       * hay otras vistas, pero se siguen sacando: así ningún estilo de una
+       * sección —la entrada animada con el scroll, sin ir más lejos— alcanza a un
+       * diálogo que no es suyo.
+       *
+       * Se mueven en vez de emitirse aquí porque el marcado los quiere junto a su
+       * tarjeta —cada `<li>` lleva su ficha— y porque un movimiento no cambia el
+       * DOM del build: el presupuesto no se entera. Tampoco cambia nada visual, un
+       * `<dialog>` sin `open` no se pinta, y su CSS no depende de ningún ancestro.
+       *
+       * Va antes que todo lo demás para que la entrada por `#proyecto/…` —que se
+       * resuelve al final de este mismo guion— encuentre el diálogo ya colocado.
+       */
+      const detailHost = document.querySelector("main")
+      if (detailHost) for (const dialog of dialogs) detailHost.append(dialog)
+
+      const lightboxFor = (
+        dialog: HTMLDialogElement,
+      ): HTMLDialogElement | undefined =>
+        Array.from(lightboxes).find(
+          (lightbox) => lightbox.id === `${dialog.id}-lightbox`,
+        )
+
+      const detachTimers = new Map<HTMLDialogElement, number>()
+      const attach = (dialog: HTMLDialogElement): void => {
+        const timer = detachTimers.get(dialog)
+        if (timer !== undefined) window.clearTimeout(timer)
+        detachTimers.delete(dialog)
+        detailHost?.append(dialog)
+      }
+
+      const detach = (dialog: HTMLDialogElement): void => {
+        detachTimers.delete(dialog)
+        if (!dialog.open) dialog.remove()
+        const lightbox = lightboxFor(dialog)
+        if (lightbox && !lightbox.open) lightbox.remove()
+      }
+
+      const scheduleDetach = (dialog: HTMLDialogElement): void => {
+        const previous = detachTimers.get(dialog)
+        if (previous !== undefined) window.clearTimeout(previous)
+        /* WebKit necesita terminar de retirar el nodo de su capa superior antes
+         de que se desconecte. Si se vuelve a pedir durante este margen,
+         `attach()` cancela el temporizador y se reutiliza el mismo shell. */
+        detachTimers.set(
+          dialog,
+          window.setTimeout(() => detach(dialog), 250),
+        )
+      }
+
+      /**
+       * El detalle de un proyecto es una dirección, no un estado suelto.
+       *
+       * Antes no lo era: abrir un proyecto no cambiaba la URL, así que no se podía
+       * enviar a nadie, y el botón de volver del navegador se saltaba el diálogo
+       * abierto y sacaba de la página entera. La paleta ya trataba así los saltos
+       * de sección —`location.hash` para que el destino entre en el historial—, y
+       * esto es lo mismo un piso más arriba.
+       *
+       * ## Abrir empuja, cerrar reemplaza
+       *
+       * El primer intento fue el obvio: abrir empuja una entrada y cerrar la
+       * deshace con `history.back()`. **No sirve**, y el test de los siete
+       * diálogos lo cazó: `back()` es una travesía asíncrona, así que cerrar uno
+       * con Escape y abrir otro acto seguido deja el `popstate` del primero
+       * llegando *después* de que el segundo ya esté abierto — y la
+       * reconciliación, obediente, cierra el que la persona acaba de abrir.
+       *
+       * Así que cerrar no viaja por el historial: **reemplaza** la entrada por la
+       * misma dirección sin hash. No hay travesía, no hay carrera, y las dos
+       * cosas que importan siguen en pie — la URL se puede compartir, y el botón
+       * de volver con el diálogo abierto dispara `popstate` y lo cierra.
+       *
+       * Lo que se paga es una entrada de historial muerta: tras abrir y cerrar,
+       * volver atrás una vez lleva a la misma página sin hash. Se limita a **una**
+       * marcando esa entrada en `history.state`: si al abrir ya estamos en la
+       * casilla, se reemplaza en vez de empujar, así que recorrer los siete
+       * proyectos no deja siete pasos que deshacer.
+       *
+       * El prefijo no se traduce a propósito: es un identificador, y una URL
+       * compartida tiene que seguir abriendo el mismo proyecto aunque quien la
+       * reciba lea el sitio en otro idioma.
+       */
+      const HASH_PREFIX = "#proyecto/"
+      const slugOf = (dialog: HTMLDialogElement): string =>
+        dialog.id.replace(/^project-/, "")
+      const hashFor = (dialog: HTMLDialogElement): string =>
+        HASH_PREFIX + slugOf(dialog)
+
+      const dialogFromHash = (): HTMLDialogElement | undefined => {
+        if (!location.hash.startsWith(HASH_PREFIX)) return undefined
+        const slug = decodeURIComponent(location.hash.slice(HASH_PREFIX.length))
+        return Array.from(dialogs).find((dialog) => slugOf(dialog) === slug)
+      }
+
+      /* Se levanta al desmontar, y no se vuelve a bajar: ahí los diálogos se
+       cierran porque la página se va, no porque nadie lo haya pedido, y
+       reescribir la URL en mitad de una navegación pisa la que el enrutador
+       está poniendo. */
+      let teardown = false
+
+      /* `dialog.close()` cambia `open` al momento, pero encola el evento `close`.
+       Si se navega atrás y adelante antes de que llegue, WebKit todavía puede
+       estar retirando el nodo de su capa superior. Registrar el motivo permite
+       esperar a ese evento sin confundir el cierre de historial con Escape. */
+      const closingFromHistory = new WeakSet<HTMLDialogElement>()
+      const closeFromHistory = (dialog: HTMLDialogElement): void => {
+        closingFromHistory.add(dialog)
+        dialog.close()
+      }
+
+      for (const dialog of dialogs) {
+        for (const opener of document.querySelectorAll<HTMLElement>(
+          `[data-detail-open="${dialog.id}"]`,
+        )) {
+          // La guarda no es teórica: `showModal()` sobre un diálogo ya abierto
+          // lanza `InvalidStateError` y se lleva por delante el resto del oyente.
+          opener.addEventListener(
+            "click",
+            (event) => {
+              if (opensElsewhere(event)) return
+              event.preventDefault()
+              if (dialog.open) return
+              attach(dialog)
+              dialog.showModal()
+              /* Si ya estamos en la casilla que dejó un cierre anterior, se
+               reemplaza: así abrir y cerrar siete proyectos deja una entrada
+               muerta y no siete. */
+              const write = history.state?.projectSlot
+                ? history.replaceState
+                : history.pushState
+              write.call(
+                history,
+                { projectSlot: true, projectDialog: dialog.id },
+                "",
+                hashFor(dialog),
+              )
+            },
+            { signal },
+          )
+        }
+
+        dialog.addEventListener(
+          "close",
+          () => {
+            const cameFromHistory = closingFromHistory.delete(dialog)
+            if (teardown) return
+            /* Sólo cuando el hash sigue siendo el suyo. Si el cierre viene de
+             `popstate`, la URL ya cambió antes y no hay nada que reescribir.
+             Y se reemplaza, no se retrocede: ver el comentario de arriba. */
+            if (!cameFromHistory && location.hash === hashFor(dialog)) {
+              history.replaceState(
+                { projectSlot: true },
+                "",
+                location.pathname + location.search,
+              )
+            }
+            scheduleDetach(dialog)
+            window.requestAnimationFrame(() => {
+              /* Atrás y adelante pueden ocurrir dentro de la misma ventana entre
+               `close()` y este evento. La URL vuelve a mandar, pero sólo cuando
+               WebKit ya confirmó que retiró el modal anterior. */
+              if (cameFromHistory && dialogFromHash() === dialog) syncFromHash()
+            })
+          },
+          { signal },
+        )
+
+        dialog
+          .querySelector<HTMLButtonElement>("[data-detail-close]")
+          ?.addEventListener("click", () => dialog.close(), { signal })
+
+        // El backdrop no cierra por defecto. Como el <dialog> no lleva relleno, su
+        // caja coincide con el panel: un clic cuyo target sea el propio diálogo
+        // viene necesariamente de fuera.
+        dialog.addEventListener(
+          "click",
+          (event) => {
+            if (event.target === dialog) dialog.close()
+          },
+          { signal },
+        )
+      }
+
+      /**
+       * Arrastrar la tira de capturas con el ratón.
+       *
+       * La tira ya se desplazaba de tres maneras: con el dedo, con la rueda
+       * lateral y con el tabulador. Con un ratón corriente no había ninguna —el
+       * navegador no arrastra cajas con scroll— así que en un portátil sin
+       * trackpad horizontal las capturas de más allá de la tercera no existían
+       * salvo abriendo el visor.
+       *
+       * Sólo puntero fino: en táctil el navegador ya lo hace, y capturar el
+       * puntero le quitaría el impulso y el rebote nativos.
+       *
+       * Los dos cuidados que tiene:
+       *
+       * - **El umbral.** Hasta los 6 px no se captura nada, así que un clic con
+       *   la mano poco firme sigue abriendo el visor.
+       * - **El clic que sobra.** Al soltar, el navegador emite un `click` sobre
+       *   la miniatura donde acabó el puntero. Se anula en fase de captura si
+       *   hubo arrastre; es la misma red que ya usa el visor con `swipedAt`.
+       *
+       * El ajuste por posiciones se apaga mientras se arrastra: con
+       * `scroll-snap-type: x mandatory` el navegador devuelve la tira a la
+       * captura más cercana en cada fotograma y el arrastre no avanza.
+       */
+      const DRAG_MIN = 6
+
+      for (const strip of document.querySelectorAll<HTMLElement>(".shots")) {
+        let dragPointer: number | null = null
+        let startX = 0
+        let startLeft = 0
+        let dragging = false
+        let draggedAt = 0
+
+        strip.addEventListener(
+          "pointerdown",
+          (event) => {
+            if (event.pointerType === "touch" || event.button !== 0) return
+            dragPointer = event.pointerId
+            startX = event.clientX
+            startLeft = strip.scrollLeft
+            dragging = false
+          },
+          { signal },
+        )
+
+        strip.addEventListener(
+          "pointermove",
+          (event) => {
+            if (dragPointer !== event.pointerId) return
+            const delta = event.clientX - startX
+
+            if (!dragging) {
+              if (Math.abs(delta) < DRAG_MIN) return
+              dragging = true
+              strip.dataset.dragging = ""
+
+              /* La captura es una mejora, no un requisito: mantiene el arrastre
+                 vivo cuando el cursor se sale de la tira. Y va protegida porque
+                 Chromium lanza `No active pointer with the given id` cuando el
+                 puntero ya no está activo —pasa con eventos sintéticos y en el
+                 borde de un `pointercancel`—, y esa excepción se llevaba por
+                 delante el resto del manejador: el arrastre no movía nada.
+                 Medido antes de esta guarda. */
+              try {
+                strip.setPointerCapture(event.pointerId)
+              } catch {
+                // Sin captura el arrastre sigue mientras el cursor no se salga.
+              }
+            }
+
+            event.preventDefault()
+            strip.scrollLeft = startLeft - delta
+          },
+          { signal },
+        )
+
+        const endDrag = (event: PointerEvent): void => {
+          if (dragPointer !== event.pointerId) return
+          if (strip.hasPointerCapture(event.pointerId)) {
+            strip.releasePointerCapture(event.pointerId)
+          }
+          dragPointer = null
+          if (dragging) draggedAt = performance.now()
+          dragging = false
+          delete strip.dataset.dragging
+        }
+
+        strip.addEventListener("pointerup", endDrag, { signal })
+        strip.addEventListener("pointercancel", endDrag, { signal })
+
+        strip.addEventListener(
+          "click",
+          (event) => {
+            if (performance.now() - draggedAt > 400) return
+            event.preventDefault()
+            event.stopPropagation()
+          },
+          { capture: true, signal },
+        )
+      }
+
+      /**
+       * Pasar de un proyecto al siguiente sin volver a la rejilla.
+       *
+       * Antes había que cerrar el diálogo, buscar la tarjeta de al lado y volver a
+       * abrir: tres gestos para leer el proyecto siguiente. El visor de capturas
+       * ya tenía prev/next dentro; el detalle, que es el nivel de arriba, no.
+       *
+       * Los botones se construyen aquí y no en el marcado porque serían **catorce
+       * nodos** —dos por diálogo— en cada una de las tres portadas, y el
+       * presupuesto de DOM del build va contado. Los rótulos traducidos llegan por
+       * `data-*` desde la lista, que es como viajan los textos en este proyecto.
+       */
+      const list = document.querySelector<HTMLElement>("[data-project-details]")
+      const order = Array.from(dialogs)
+
+      const jumpTo = (index: number): void => {
+        const target = order.at(index % order.length)
+        if (!target) return
+
+        /* Abrir escribe el hash nuevo **después** de cerrar el viejo. El evento
+         `close` del anterior llega encolado, y para entonces el hash ya es el
+         del nuevo, así que su manejador no reescribe nada: la entrada de
+         historial se reutiliza en vez de acumularse. */
+        for (const dialog of order) if (dialog.open) dialog.close()
+        attach(target)
+        target.showModal()
+        history.replaceState(
+          { projectSlot: true, projectDialog: target.id },
+          "",
+          hashFor(target),
+        )
+      }
+
+      if (list && order.length > 1) {
+        for (const [index, dialog] of order.entries()) {
+          const header = dialog.querySelector("header")
+          const close = dialog.querySelector<HTMLButtonElement>(
+            "[data-detail-close]",
+          )
+          if (!header || !close) continue
+
+          const actions = document.createElement("div")
+          actions.className = "detail-actions"
+
+          for (const [step, key, glyph] of [
+            [-1, "previousProject", "←"],
+            [1, "nextProject", "→"],
+          ] as const) {
+            const button = document.createElement("button")
+            button.type = "button"
+            button.className = "detail-step"
+            const label = list.dataset[key] ?? ""
+            button.setAttribute("aria-label", label)
+            button.title = label
+            // El glifo es decoración: el nombre lo lleva el `aria-label`.
+            const mark = document.createElement("span")
+            mark.setAttribute("aria-hidden", "true")
+            mark.textContent = glyph
+            button.append(mark)
+            // Da la vuelta por los dos extremos: son siete, y
+            // toparse con el final de una lista corta molesta más de lo que ayuda.
+            button.addEventListener(
+              "click",
+              () => jumpTo(index + step + order.length),
+              { signal },
+            )
+            actions.append(button)
+          }
+
+          // El botón de cerrar se muda al grupo: así los tres se leen como una
+          // sola fila de controles y el `gap` del `<header>` no los separa.
+          actions.append(close)
+          header.append(actions)
+        }
+      }
+
+      /** Pone el DOM de acuerdo con la URL, en los dos sentidos. */
+      const syncFromHash = (): void => {
+        const wanted = dialogFromHash()
+        for (const dialog of dialogs) {
+          if (dialog.open && dialog !== wanted) closeFromHistory(dialog)
+        }
+        if (wanted && !wanted.open && !closingFromHistory.has(wanted)) {
+          attach(wanted)
+          wanted.showModal()
+        }
+      }
+
+      /**
+       * Los dos eventos, que cubren cosas distintas.
+       *
+       * `popstate` es la travesía: atrás y adelante. `hashchange` es llegar a un
+       * `#proyecto/…` sin recargar —pegar el enlace en la barra estando ya en la
+       * página, o seguirlo desde otro sitio del propio documento—, que no dispara
+       * `popstate`.
+       *
+       * Y no se hace un bucle: `pushState`/`replaceState` **no** disparan
+       * `hashchange`, así que escribir la URL al abrir no se reentra a sí mismo.
+       */
+      window.addEventListener("popstate", syncFromHash, { signal })
+      window.addEventListener("hashchange", syncFromHash, { signal })
+
+      /* Entrar directamente por un enlace compartido. Va después de registrar
+       todo lo demás para que el diálogo abra ya con sus oyentes puestos. */
+      if (dialogFromHash()) syncFromHash()
+
+      // --- Visor de capturas -------------------------------------------------
+
+      for (const lightbox of lightboxes) {
+        const openers = Array.from(
+          document.querySelectorAll<HTMLButtonElement>(
+            `[data-lightbox-open="${lightbox.id}"]`,
+          ),
+        )
+        const image = lightbox.querySelector<HTMLImageElement>(
+          "[data-lightbox-image]",
+        )
+        const frame = lightbox.querySelector<HTMLElement>(
+          "[data-lightbox-frame]",
+        )
+        const caption = lightbox.querySelector<HTMLElement>(
+          "[data-lightbox-caption]",
+        )
+        const counter = lightbox.querySelector<HTMLElement>(
+          "[data-lightbox-current]",
+        )
+        const status = lightbox.querySelector<HTMLElement>(
+          "[data-lightbox-status]",
+        )
+        const previous = lightbox.querySelector<HTMLButtonElement>(
+          "[data-lightbox-prev]",
+        )
+        const next = lightbox.querySelector<HTMLButtonElement>(
+          "[data-lightbox-next]",
+        )
+        let current = 0
+        let liveFrame: number | undefined
+
+        /**
+         * Zoom y arrastre sobre la captura.
+         *
+         * Una captura de escritorio dentro de un móvil no se lee: por eso el
+         * marco `browser` se servía al doble de ancho y se desplazaba en
+         * horizontal, que era un parche —enseña la mitad y no deja acercarse a
+         * un detalle—. Esto es la respuesta de verdad.
+         *
+         * ## Cómo convive con el gesto de pasar
+         *
+         * Mientras el zoom es 1, arrastrar pasa de captura (el swipe que ya
+         * estaba). En cuanto se amplía, arrastrar **desplaza** la imagen: son el
+         * mismo gesto y no pueden estar los dos activos, así que manda el zoom.
+         * Lo mismo con las flechas del teclado.
+         *
+         * ## Por qué `element.style` y no una clase
+         *
+         * La escala y el desplazamiento son continuos: no hay un juego de clases
+         * que los exprese. La CSP del sitio prohíbe `style=` en el marcado, pero
+         * no escribir en el CSSOM desde el guion, que es lo que se hace aquí.
+         */
+        const ZOOM_MAX = 4
+        const ZOOM_STEP = 1.6
+        let zoom = 1
+        let panX = 0
+        let panY = 0
+
+        const applyZoom = (): void => {
+          if (!image) return
+          /* Los límites dependen de cuánto sobra al ampliar: sin ellos la imagen
+           se puede arrastrar fuera de la vista y quedarse en un borde. */
+          const box = image.getBoundingClientRect()
+          const slackX = Math.max(0, (box.width * zoom - box.width) / 2)
+          const slackY = Math.max(0, (box.height * zoom - box.height) / 2)
+          panX = Math.min(slackX, Math.max(-slackX, panX))
+          panY = Math.min(slackY, Math.max(-slackY, panY))
+
+          image.style.scale = String(zoom)
+          image.style.translate = `${panX}px ${panY}px`
+          image.style.cursor = zoom > 1 ? "grab" : ""
+          // Lo lee el CSS para apagar el `scroll-snap` del marco mientras se
+          // arrastra ampliado, y para que el pie no tape la esquina de la imagen.
+          if (zoom > 1) lightbox.dataset.zoomed = ""
+          else delete lightbox.dataset.zoomed
+        }
+
+        const resetZoom = (): void => {
+          zoom = 1
+          panX = 0
+          panY = 0
+          applyZoom()
+        }
+
+        const setZoom = (next: number): void => {
+          const clamped = Math.min(ZOOM_MAX, Math.max(1, next))
+          if (clamped === zoom) return
+          if (clamped === 1) {
+            resetZoom()
+            return
+          }
+          // Al reducir, el desplazamiento se encoge con la escala: si no, salir
+          // del zoom deja la imagen desplazada aunque ya quepa entera.
+          panX *= clamped / zoom
+          panY *= clamped / zoom
+          zoom = clamped
+          applyZoom()
+        }
+
+        const sync = (index: number): void => {
+          const opener = openers[index]
+          const source = opener?.querySelector<HTMLImageElement>("img")
+          if (!opener || !source || !image || !frame || !caption) return
+
+          current = index
+          image.src = source.currentSrc || source.src
+          image.alt = source.alt
+
+          const srcset = source.getAttribute("srcset")
+          if (srcset) image.setAttribute("srcset", srcset)
+          else image.removeAttribute("srcset")
+
+          for (const dimension of ["width", "height"] as const) {
+            const value = source.getAttribute(dimension)
+            if (value) image.setAttribute(dimension, value)
+            else image.removeAttribute(dimension)
+          }
+
+          const sizes = opener.dataset.lightboxSizes
+          if (sizes) image.setAttribute("sizes", sizes)
+          else image.removeAttribute("sizes")
+
+          const shape = opener.dataset.lightboxShape
+          if (shape) frame.dataset.shape = shape
+          else delete frame.dataset.shape
+
+          caption.textContent = opener.dataset.lightboxCaption ?? ""
+          if (counter) counter.textContent = String(index + 1)
+          /* `aria-disabled` y no la propiedad nativa: el botón sigue siendo
+           alcanzable con el tabulador en los extremos. Quien frena la acción es
+           `step()`, que ya comprobaba los límites. */
+          previous?.setAttribute("aria-disabled", String(index === 0))
+          next?.setAttribute(
+            "aria-disabled",
+            String(index === openers.length - 1),
+          )
+
+          for (const [position, thumb] of thumbs.entries()) {
+            if (position === index) thumb.setAttribute("aria-current", "true")
+            else thumb.removeAttribute("aria-current")
+          }
+          thumbs[index]?.scrollIntoView({ block: "nearest", inline: "nearest" })
+          // Cambiar de captura devuelve el zoom a su sitio: heredar la ampliación
+          // de la anterior deja la nueva entrando por una esquina al azar.
+          resetZoom()
+
+          status?.replaceChildren()
+          if (liveFrame !== undefined) window.cancelAnimationFrame(liveFrame)
+          liveFrame = window.requestAnimationFrame(() => {
+            liveFrame = undefined
+            if (status)
+              status.textContent = opener.dataset.lightboxAnnounce ?? ""
+
+            /* Aquí se medía si el marco desbordaba para darle `tabIndex` y
+             `role="group"`: mientras las capturas de escritorio se servían a
+             200vw en móvil, el marco se desplazaba y un contenedor scrollable
+             tiene que poder recorrerse con teclado (WCAG 2.1.1). Ese parche se
+             ha ido de `ProjectDetail.astro` —la captura entra entera y se amplía
+             con `applyZoom`—, así que la medida daba siempre falso y lo único
+             que podía hacer era dejar una parada de tabulación vacía si alguien
+             volvía a tocar los anchos. */
+          })
+        }
+
+        for (const opener of openers) {
+          opener.addEventListener(
+            "click",
+            () => {
+              const index = Number(opener.dataset.lightboxIndex ?? 0)
+              detailHost?.append(lightbox)
+              /* `sync()` antes de abrir. Al revés, el visor se pinta un
+               fotograma con la captura de la vez anterior —y la primera vez,
+               con un `<img>` sin `src`— antes de que llegue la buena. */
+              sync(index)
+              if (!lightbox.open) lightbox.showModal()
+            },
+            { signal },
+          )
+        }
+
+        const step = (delta: number): void => {
+          const index = current + delta
+          if (index < 0 || index >= openers.length) return
+          sync(index)
+        }
+
+        /**
+         * El rail de miniaturas, dentro del visor.
+         *
+         * Con siete capturas, llegar a la quinta costaba cuatro pulsaciones a
+         * ciegas: el contador decía «2 / 7» pero no qué había en la 5. El rail
+         * las enseña todas y salta directo.
+         *
+         * Va **entre** las dos flechas y no en una fila nueva: el panel es un
+         * grid de tres filas —barra, figura, navegación— y una cuarta fila le
+         * comería alto a la figura, que es lo único que importa aquí.
+         *
+         * Las miniaturas se clonan de las que ya están en el diálogo de detalle:
+         * mismo `src` y mismo `srcset`, así que el navegador no descarga nada
+         * nuevo, y no cuestan ni un nodo del presupuesto de HTML porque no
+         * existen hasta que corre esto.
+         */
+        const nav = lightbox.querySelector<HTMLElement>(".lightbox-nav")
+        const thumbs: HTMLButtonElement[] = []
+
+        if (nav && next && openers.length > 1) {
+          const rail = document.createElement("div")
+          rail.className = "lightbox-rail"
+
+          for (const [index, opener] of openers.entries()) {
+            const source = opener.querySelector<HTMLImageElement>("img")
+            if (!source) continue
+
+            const thumb = document.createElement("button")
+            thumb.type = "button"
+            thumb.className = "lightbox-thumb"
+            // El nombre sale del pie, que ya está escrito y traducido.
+            thumb.setAttribute(
+              "aria-label",
+              opener.dataset.lightboxCaption ?? "",
+            )
+            thumb.title = opener.dataset.lightboxCaption ?? ""
+            thumb.append(source.cloneNode(true))
+            thumb.addEventListener("click", () => sync(index), { signal })
+
+            rail.append(thumb)
+            thumbs.push(thumb)
+          }
+
+          nav.insertBefore(rail, next)
+        }
+
+        previous?.addEventListener("click", () => step(-1), { signal })
+        next?.addEventListener("click", () => step(1), { signal })
+
+        lightbox.addEventListener(
+          "keydown",
+          (event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
+
+            /* Ampliado, las flechas recorren la imagen en vez de pasar de
+             captura: es el equivalente de teclado al arrastre, y sin él quien
+             no usa ratón puede ampliar pero no llegar a los bordes. */
+            if (zoom > 1) {
+              event.preventDefault()
+              panX += event.key === "ArrowRight" ? -60 : 60
+              applyZoom()
+              return
+            }
+
+            /* Sin ampliar, las flechas pasan de captura y ya está. Aquí había
+             antes una cesión al marco desplazable —mientras las capturas de
+             escritorio se servían a 200vw, recorrerlo con teclado era suyo—; ese
+             parche se fue y el recorrido de una captura ampliada lo lleva la
+             rama de arriba. */
+            event.preventDefault()
+            step(event.key === "ArrowRight" ? 1 : -1)
+          },
+          { signal },
+        )
+
+        /**
+         * El gesto de arrastre.
+         *
+         * En un móvil el visor sólo tenía dos botones al pie: la tira de
+         * miniaturas de detrás sí encadena con el dedo —tiene `scroll-snap`— pero
+         * el visor abierto no, que es justo donde se espera.
+         *
+         * Llevaba una excepción para el marco `browser` cuando desbordaba —el
+         * desplazamiento horizontal era suyo y robarle el gesto dejaba la captura
+         * imposible de recorrer—; el marco ya no desborda y el arrastre es del
+         * visor siempre que no haya zoom.
+         *
+         * `pointer-*` y no `touch-*`: cubre dedo, lápiz y ratón con un solo juego
+         * de oyentes, y `setPointerCapture` evita perder el rastro si el dedo sale
+         * del elemento a mitad del gesto.
+         */
+        const SWIPE_MIN = 45
+        let swipeFrom: { x: number; y: number; id: number } | undefined
+        /** Marca de tiempo del último gesto, para desarmar el clic que le sigue. */
+        let swipedAt = 0
+
+        lightbox.addEventListener(
+          "pointerdown",
+          (event) => {
+            if (!event.isPrimary || event.pointerType === "mouse") return
+            // Ampliado, el arrastre desplaza la imagen en vez de pasar de
+            // captura: son el mismo gesto y manda el zoom.
+            if (zoom > 1) return
+            if (
+              event.target instanceof Element &&
+              event.target.closest("button")
+            ) {
+              return
+            }
+            swipeFrom = {
+              x: event.clientX,
+              y: event.clientY,
+              id: event.pointerId,
+            }
+          },
+          { signal },
+        )
+
+        lightbox.addEventListener(
+          "pointerup",
+          (event) => {
+            const from = swipeFrom
+            swipeFrom = undefined
+            if (!from || from.id !== event.pointerId) return
+
+            const dx = event.clientX - from.x
+            const dy = event.clientY - from.y
+            // Más horizontal que vertical, o un desplazamiento de la página se
+            // lleva por delante la captura.
+            if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) <= Math.abs(dy)) return
+
+            /* Un arrastre no es un clic, pero el navegador emite los dos: sin
+             esto, el `click` de cierre del fondo llegaría detrás del gesto y
+             cerraría el visor que se acaba de pasar. */
+            event.preventDefault()
+            swipedAt = event.timeStamp
+            step(dx < 0 ? 1 : -1)
+          },
+          { signal },
+        )
+
+        lightbox.addEventListener(
+          "pointercancel",
+          () => {
+            swipeFrom = undefined
+          },
+          { signal },
+        )
+
+        /* La rueda amplía sobre el punto donde está el cursor, no sobre el
+         centro: acercarse a una esquina y que la imagen se vaya al medio es lo
+         que hace que el zoom de una galería se sienta roto. */
+        lightbox.addEventListener(
+          "wheel",
+          (event) => {
+            if (!image || !(event.target instanceof Element)) return
+            if (!event.target.closest("[data-lightbox-frame]")) return
+
+            event.preventDefault()
+            const box = image.getBoundingClientRect()
+            const before = zoom
+            const next = event.deltaY < 0 ? zoom * ZOOM_STEP : zoom / ZOOM_STEP
+            setZoom(next)
+            if (zoom === before) return
+
+            const offsetX = event.clientX - (box.left + box.width / 2)
+            const offsetY = event.clientY - (box.top + box.height / 2)
+            panX -= offsetX * (zoom / before - 1)
+            panY -= offsetY * (zoom / before - 1)
+            applyZoom()
+          },
+          { signal, passive: false },
+        )
+
+        // Doble clic o doble toque: el atajo de toda la vida entre 1× y cerca.
+        lightbox.addEventListener(
+          "dblclick",
+          (event) => {
+            if (!(event.target instanceof Element)) return
+            if (!event.target.closest("[data-lightbox-frame]")) return
+            setZoom(zoom > 1 ? 1 : 2.5)
+          },
+          { signal },
+        )
+
+        /* Arrastrar ampliado desplaza. Con `setPointerCapture` el gesto sigue
+         siendo suyo aunque el dedo salga de la imagen, que es lo normal cuando
+         se recorre una captura grande. */
+        let panFrom: { x: number; y: number; id: number } | undefined
+
+        lightbox.addEventListener(
+          "pointerdown",
+          (event) => {
+            if (zoom === 1 || !event.isPrimary) return
+            if (!(event.target instanceof Element)) return
+            if (!event.target.closest("[data-lightbox-frame]")) return
+
+            panFrom = {
+              x: event.clientX - panX,
+              y: event.clientY - panY,
+              id: event.pointerId,
+            }
+            image?.setPointerCapture(event.pointerId)
+            if (image) image.style.cursor = "grabbing"
+          },
+          { signal },
+        )
+
+        lightbox.addEventListener(
+          "pointermove",
+          (event) => {
+            if (!panFrom || panFrom.id !== event.pointerId) return
+            event.preventDefault()
+            panX = event.clientX - panFrom.x
+            panY = event.clientY - panFrom.y
+            applyZoom()
+          },
+          { signal },
+        )
+
+        for (const done of ["pointerup", "pointercancel"] as const) {
+          lightbox.addEventListener(
+            done,
+            (event) => {
+              if (!panFrom) return
+              panFrom = undefined
+              swipedAt = event.timeStamp
+              image?.releasePointerCapture?.(event.pointerId)
+              applyZoom()
+            },
+            { signal },
+          )
+        }
+
+        /* El zoom por teclado. Sin esto sólo se puede ampliar con rueda o dedo, o
+         sea que quien navega con teclado se queda sin la función entera. */
+        lightbox.addEventListener(
+          "keydown",
+          (event) => {
+            if (event.key === "+" || event.key === "=")
+              setZoom(zoom * ZOOM_STEP)
+            else if (event.key === "-") setZoom(zoom / ZOOM_STEP)
+            else if (event.key === "0") resetZoom()
+            else return
+            event.preventDefault()
+          },
+          { signal },
+        )
+
+        // Cerrar deja el visor como se encontró: la próxima captura entra a 1×.
+        lightbox.addEventListener(
+          "close",
+          () => {
+            resetZoom()
+            queueMicrotask(() => {
+              if (!lightbox.open) lightbox.remove()
+            })
+          },
+          { signal },
+        )
+
+        // Aquí la tira cubre el diálogo entero, así que `target === dialog` no
+        // distingue el fondo: se comprueba contra lo que sí es contenido.
+        lightbox.addEventListener(
+          "click",
+          (event) => {
+            if (!(event.target instanceof Element)) return
+            // El clic sintético que sigue a un arrastre cerraría el visor que el
+            // gesto acaba de pasar. 400 ms cubre de sobra la distancia entre los
+            // dos eventos sin tragarse un clic de verdad.
+            if (event.timeStamp - swipedAt < 400) return
+            if (
+              !event.target.closest(
+                "img, button, .slide-caption, .lightbox-title",
+              )
+            ) {
+              lightbox.close()
+            }
+          },
+          { signal },
+        )
+
+        lightbox
+          .querySelector<HTMLButtonElement>("[data-lightbox-close]")
+          ?.addEventListener("click", () => lightbox.close(), { signal })
+
+        signal.addEventListener("abort", () => {
+          if (liveFrame !== undefined) window.cancelAnimationFrame(liveFrame)
+        })
+      }
+
+      // Navegar con un diálogo abierto dejaría `html { overflow: hidden }` puesto
+      // por la regla `:has(dialog[open])` sobre una página que ya no lo tiene.
+      // `pagehide` cubre la salida —una navegación, una recarga— y evita que
+      // WebKit descarte el documento con un nodo aún en la capa superior; el
+      // `abort`, un desmontaje.
+      const closeForTeardown = (): void => {
+        teardown = true
+        for (const timer of detachTimers.values()) window.clearTimeout(timer)
+        detachTimers.clear()
+        for (const lightbox of lightboxes) if (lightbox.open) lightbox.close()
+        for (const dialog of dialogs) if (dialog.open) dialog.close()
+      }
+      window.addEventListener("pagehide", closeForTeardown, {
+        once: true,
+        signal,
+      })
+      signal.addEventListener("abort", closeForTeardown)
+      // Sólo el detalle abierto permanece en el DOM vivo. Los demás quedan
+      // cacheados como nodos desconectados hasta que se pidan.
+      for (const dialog of dialogs) if (!dialog.open) detach(dialog)
+    }
+
+    const projectList = document.querySelector<HTMLElement>(
+      "[data-project-details]",
+    )
+
+    /**
+     * La hoja de los diálogos viaja con la ficha, no con la página.
+     *
+     * Hasta el 30-09-2026 la portada y el índice incluían un
+     * `<ProjectDetail stylesOnly />` que no pintaba nada, sólo para que Astro
+     * metiera su hoja: 15,8 KB bloqueantes en el primer pintado de páginas que
+     * no abren un diálogo hasta que alguien pulsa, y de rebote en privacidad,
+     * servicios y «sobre mí», que comparten módulo de ruta con el índice
+     * (PERF-06). `/project-details/` sí la enlaza, así que se adoptan sus
+     * `<link rel="stylesheet">` que falten aquí y se espera a que carguen: sin
+     * esa espera el diálogo se abriría un fotograma sin estilos. Si una no
+     * carga, el clic acaba en la ficha suelta, como con cualquier otro fallo.
+     */
+    const adoptStylesheets = (parsed: Document): Promise<unknown> => {
+      const pathOf = (href: string): string =>
+        new URL(href, location.href).pathname
+      const present = new Set(
+        [
+          ...document.querySelectorAll<HTMLLinkElement>(
+            'link[rel="stylesheet"]',
+          ),
+        ].map((link) => pathOf(link.href)),
+      )
+      const missing = [
+        ...parsed.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
+      ]
+        .map((link) => link.getAttribute("href") ?? "")
+        .filter((href) => href && !present.has(pathOf(href)))
+
+      return Promise.all(
+        missing.map(
+          (href) =>
+            new Promise<void>((resolve, reject) => {
+              const link = document.createElement("link")
+              link.rel = "stylesheet"
+              link.href = href
+              link.addEventListener("load", () => resolve(), { once: true })
+              link.addEventListener(
+                "error",
+                () => reject(new Error(`stylesheet ${href}`)),
+                { once: true },
+              )
+              document.head.append(link)
+            }),
+        ),
+      )
+    }
+
+    let detailsPromise: Promise<void> | null = null
+    const loadDetails = (): Promise<void> => {
+      detailsPromise ??= fetch(
+        projectList?.dataset.projectDetailsUrl ?? "/project-details/",
+        { signal },
+      )
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          return response.text()
+        })
+        .then((html) => {
+          if (signal.aborted) return
+          const parsed = new DOMParser().parseFromString(html, "text/html")
+          const host = document.querySelector("main")
+          if (!host) throw new Error("Project detail host is missing")
+          for (const dialog of parsed.querySelectorAll(
+            "dialog[data-detail], dialog[data-lightbox]",
+          )) {
+            dialog.removeAttribute("open")
+            host.append(document.importNode(dialog, true))
+          }
+          return adoptStylesheets(parsed)
+        })
+        .then(() => undefined)
+        .catch((error: unknown) => {
+          detailsPromise = null
+          throw error
+        })
+      return detailsPromise
+    }
+
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (initialized || !(event.target instanceof Element)) return
+        if (opensElsewhere(event)) return
+        const opener = event.target.closest<HTMLElement>("[data-detail-open]")
+        if (!opener) return
+        event.preventDefault()
+        void loadDetails()
+          .then(() => {
+            initialize()
+            opener.click()
+          })
+          .catch(() => {
+            if (opener instanceof HTMLAnchorElement) location.href = opener.href
+          })
+      },
+      { capture: true, signal },
+    )
+
+    const loadHashTarget = (): void => {
+      if (initialized || !location.hash.startsWith("#proyecto/")) return
+      void loadDetails()
+        .then(initialize)
+        .catch(() => {})
+    }
+    window.addEventListener("hashchange", loadHashTarget, { signal })
+    window.addEventListener("popstate", loadHashTarget, { signal })
+    loadHashTarget()
+  })
+</script>

@@ -1,0 +1,44 @@
+---
+import ProjectDetail from "@/components/ProjectDetail.astro"
+import { PROJECT_DEMOS } from "@/data/projectDemos"
+import { getCv, type Locale } from "@/cv"
+import Layout from "@/layouts/Layout.astro"
+import { localeStaticPaths } from "@/lib/i18n"
+
+export const getStaticPaths = localeStaticPaths
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+const cv = await getCv()
+const title = {
+  es: "Detalles de proyectos",
+  ca: "Detalls de projectes",
+  en: "Project details",
+}[locale]
+---
+
+<Layout cv={cv} title={title} description={title} locale={locale} noindex>
+  <main id="main">
+    {
+      cv.projects.map((project) => (
+        <ProjectDetail
+          id={`project-${project.id}`}
+          project={project}
+          {...(PROJECT_DEMOS[project.id]
+            ? { demo: PROJECT_DEMOS[project.id] }
+            : {})}
+          locale={locale}
+        />
+      ))
+    }
+  </main>
+  {
+    /* Sin guion que abra la ficha del `#project-*`: lo hubo del 31-08 al
+       06-10-2026 y la CSP lo bloqueaba —un `is:inline` en el cuerpo, sin hash—.
+       La que se ve es la de `.detail:target` en `ProjectDetail.astro`, con
+       JavaScript o sin él. */
+  }
+</Layout>

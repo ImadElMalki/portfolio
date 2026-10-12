@@ -1,0 +1,543 @@
+---
+import Section from "../Section.astro"
+import ArrowRight from "@/icons/arrow-right.astro"
+import ProjectDialogRuntime from "../projects/ProjectDialogRuntime.astro"
+import ProjectThumb from "../projects/ProjectThumb.astro"
+
+import type { CvData, Locale } from "@/cv"
+import { PROJECTS_COPY } from "@/data/projects"
+import { printableUrl, projectStatusLabel } from "@/lib/cvFormat"
+import { t } from "@/lib/i18n"
+import { localized, localizedPath } from "@/lib/i18n"
+import { projectPagePath, publicPagePath } from "@/lib/publicPages"
+import { sectionId, sectionTitle } from "@/lib/sections"
+
+interface Props {
+  locale: Locale
+  cv: Readonly<CvData>
+}
+
+const { locale, cv } = Astro.props
+const { projects } = cv
+
+/**
+ * Tres a la vista y el resto plegados, como los certificados.
+ *
+ * Siete tarjetas con título, insignia y párrafo eran el bloque más largo de la
+ * página —más que Experiencia, que es la sección que sí vende— y las de abajo
+ * se leían en diagonal o no se leían. Se enseñan tres, con su primera captura,
+ * y el resto queda tras «Ver más» y en el índice.
+ *
+ * ## Cuáles
+ *
+ * Va marcado en `cv.json` con `featured`, igual que los certificados y las
+ * habilidades. Hasta el 06-10-2026 salían Amazon Spending Tracker y Riolan
+ * Solutions porque estaban publicados: se dio por hecho que una tarjeta privada
+ * invitaba a mirar algo que no se podía mirar. No era así —cada ficha enseña
+ * capturas, decisiones y stack aunque el código sea privado—, y mientras tanto
+ * la portada de un desarrollador «Angular & Java» abría con una extensión de
+ * JavaScript y una web de WordPress. Ahora salen 100 Cims (Angular, Spring Boot
+ * y PostgreSQL: el stack del titular), el asistente de Strava y Garmin (colas,
+ * cifrado, R2: lo más profundo de backend) y Amazon, que sigue siendo el que se
+ * puede instalar.
+ *
+ * El orden del array **no** se toca para conseguirlo: es orden de autor y lo
+ * leen el PDF, `/cv.json` y `/cv.md`. Una marca no mueve nada de eso.
+ *
+ * Sin ninguna marca se cae a los tres primeros, que es el orden ya curado del
+ * archivo. Es el mismo respaldo que `Certifications.astro`.
+ *
+ * ## Los otros cinco no están, ni plegados
+ *
+ * Hasta el 07-10-2026 el resto vivía tras un «Ver 5 más»: cinco tarjetas con
+ * su miniatura y su texto, en el HTML de cada visita, que casi nadie abría
+ * teniendo justo debajo el enlace al índice, donde están los ocho con su
+ * propia dirección. Un pliegue que repite lo que hay a un clic cuesta DOM y no
+ * añade nada, así que aquí quedan los tres destacados y el enlace.
+ */
+const VISIBLE_PROJECTS = 3
+
+const marked = projects.filter(({ featured }) => featured)
+const visible = marked.length > 0 ? marked : projects.slice(0, VISIBLE_PROJECTS)
+---
+
+<Section id={sectionId("projects")} title={sectionTitle("projects", locale)}>
+  {
+    /* Los dos rótulos de la navegación entre proyectos viajan aquí, una vez, y
+      no en cada diálogo: los botones los construye el guion —son catorce nodos
+      que no tienen por qué existir en el HTML— pero traducir no es cosa suya. */
+  }
+  <ul
+    class="project-list project-list--featured"
+    data-project-details
+    data-project-details-url={localizedPath(locale, "/project-details/")}
+    data-previous-project={t(locale, "previousProject")}
+    data-next-project={t(locale, "nextProject")}
+  >
+    {
+      visible.map((project) => {
+        const { description, id, name, status } = project
+        const visibleName = localized(name, locale)
+        const dialogId = `project-${id}`
+        // En papel la tarjeta se reduce a una fila, y su enlace es lo único que
+        // se puede seguir desde el PDF: en pantalla vive dentro del diálogo.
+        const printLink = project.links?.[0]
+
+        return (
+          <li data-project-id={id}>
+            <article data-status={status}>
+              <ProjectThumb
+                projectId={id}
+                sizes="(width <= 700px) 100vw, (width < 900px) 50vw, 300px"
+              />
+              <header>
+                <div class="project-heading">
+                  <h3>{visibleName}</h3>
+                  <span class="status">
+                    {projectStatusLabel(status, locale)}
+                  </span>
+                </div>
+                <p>{localized(description, locale)}</p>
+                {printLink && (
+                  <a class="print print-link" href={printLink.url}>
+                    {printableUrl(printLink.url)}
+                  </a>
+                )}
+              </header>
+
+              {/* Único destino de la tarjeta, y es la tarjeta entera: una capa
+                  vacía estirada sobre ella cuyo nombre accesible sale del
+                  `aria-label`.
+
+                  El `href` apunta a `/proyectos/<id>/`, que es la dirección
+                  real y compartible de la ficha; el guion lo intercepta y abre
+                  el diálogo sin navegar. Sin JavaScript —o con el botón central
+                  del ratón— se llega a la página, que dice lo mismo. */}
+              <a
+                class="detail-trigger"
+                data-detail-open={dialogId}
+                aria-haspopup="dialog"
+                aria-label={`${t(locale, "viewDemo")}: ${visibleName}`}
+                href={projectPagePath(id, locale)}
+              />
+            </article>
+          </li>
+        )
+      })
+    }
+  </ul>
+
+  {
+    /* La sección enseña los tres destacados; el índice tiene los ocho, cada uno
+      con su dirección propia. Es el único enlace del sitio que lleva allí, y
+      `check-build.mjs` comprueba que siga estando. */
+  }
+  <a
+    class="projects-index-link bracket-link"
+    href={publicPagePath("projects", locale)}
+  >
+    <span class="bracket-link__bracket" aria-hidden="true">[</span>
+    <span>{localized(PROJECTS_COPY.indexLink, locale)}</span>
+    <span class="bracket-link__arrow" aria-hidden="true">
+      <ArrowRight />
+    </span>
+    <span class="bracket-link__bracket" aria-hidden="true">]</span>
+  </a>
+</Section>
+
+<ProjectDialogRuntime />
+
+<style>
+  .projects-index-link {
+    display: inline-flex;
+    margin-top: 1rem;
+  }
+
+  .project-list {
+    display: grid;
+    gap: 1.1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* La primera tarjeta destaca; la última se ensancha cuando quedaría sola,
+     así la rejilla nunca deja un hueco. */
+  .project-list > li:first-child,
+  .project-list > li:last-child:nth-child(even) {
+    grid-column: 1 / -1;
+  }
+
+  /* Los tres destacados, en fila donde caben: tres tarjetas iguales con su
+     captura se comparan de un vistazo, y una a lo ancho de 920 px estiraba la
+     miniatura hasta enseñar sólo la cabecera de la captura. Por debajo vuelven
+     a la rejilla de dos con la primera a lo ancho. */
+  @media (width >= 900px) {
+    .project-list--featured {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .project-list--featured > li:first-child,
+    .project-list--featured > li:last-child:nth-child(even) {
+      grid-column: auto;
+    }
+  }
+
+  /**
+   * Filete de puntos en reposo, sólido al responder.
+   *
+   * Es el mismo idioma que ya usa el chip de fechas (`DateRange.astro`) y los
+   * botones de cierre del diálogo: en reposo la caja está insinuada, y cuando
+   * algo la señala —puntero o tabulador— se cierra. Dicho de otro modo, el trazo
+   * discontinuo es el estado de espera, no un adorno.
+   *
+   * `dashed` y no `dotted`: a 1 px de grosor Chromium dibuja `dotted` como una
+   * fila de cuadrados de 1 px que a lo largo de un radio de 1rem se apelmazan en
+   * las curvas. `dashed` mantiene el ritmo en la esquina.
+   */
+  article {
+    /**
+     * El brazo de las escuadras, y su tono.
+     *
+     * A cero en reposo: el encuadre no se ve hasta que la tarjeta responde. Se
+     * probó dejarlo a 10 px y apagado al tono del filete, y con siete tarjetas
+     * en rejilla eran veintiocho marcas permanentes compitiendo con el texto,
+     * que es lo que la lista de proyectos no necesita. El encuadre es la
+     * respuesta, no el estado de espera —el de espera ya lo dice el filete
+     * discontinuo de la propia tarjeta—.
+     *
+     * El dibujo en sí ya no vive aquí: es `.instrument-frame`, en `Layout.astro`,
+     * que comparten la tarjeta y el diálogo de detalle. Lo que queda
+     * en este bloque son las dos diferencias de la tarjeta — que arranca con el
+     * brazo a cero, y que lo enciende al responder al puntero o al foco.
+     */
+    --arm: 0px;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 1rem;
+    box-shadow: var(--shadow);
+    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 1.25rem;
+    position: relative;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      transform 0.2s ease,
+      scale var(--tick);
+  }
+
+  /* La tarjeta entera es el disparador del diálogo, así que se hunde como un
+     botón al pulsarla. `scale` es propiedad aparte de `transform`, de modo que
+     el `translateY(-2px)` del hover sigue en pie y los dos se componen. Un 98 %
+     y no el 96 % de la barra: sobre una caja de 300 px el mismo porcentaje se
+     ve como un salto. */
+  article:active {
+    scale: 0.98;
+  }
+
+  /**
+   * La tira: una barra de puntos **en el canto superior** que se enciende con
+   * la tarjeta.
+   *
+   * Es la idea de la interfaz Glyph —un segmento de luz que responde— dicha con
+   * el motivo que el sitio ya usa en todas partes. En reposo va al tono del
+   * filete, así que se lee como parte del canto; al pasar por encima salta a
+   * acento y se le añade el halo.
+   *
+   * ## Por qué en el canto y centrada
+   *
+   * Estuvo dentro del relleno, arriba a la izquierda y alineada con el texto.
+   * Ahí no tocaba ningún borde, así que no se leía como una luz del aparato
+   * sino como unos puntos suspensivos mal puestos encima del título, con el
+   * que además competía. Centrada y montada sobre el filete —`top: -2px`— pasa
+   * a ser lo que es: una luz en el canto de la caja. Es el mismo sitio que
+   * ocupa la tira del panel de servicios, así que las dos se leen como el
+   * mismo recurso.
+   *
+   * Centrada cabe además entre las dos escuadras de arriba sin tocarlas: cada
+   * brazo mide 22 px desde su esquina y la tira encendida ocupa 60 en el
+   * medio.
+   *
+   * ## El encendido va por `color`, no por `--dot-ink`
+   *
+   * El hover escribía `--dot-ink: var(--accent)` y no hacía nada: el `var()`
+   * de dentro de `--dot-fine` se sustituye donde se **declara**, en `:root`,
+   * donde `--dot-ink` no existe todavía, así que el degradado llega a todas
+   * partes con `currentColor` ya cocido. Está documentado en
+   * `Section.astro`. Lo que sí funciona es `color` en el propio elemento, que es
+   * lo que se hace aquí — antes se veía un halo rojo alrededor de unos puntos
+   * grises.
+   *
+   * **Se suma al `--glow-hover`, no lo sustituye.** El halo de la tarjeta es la
+   * misma receta que `.bar-control` —está escrito en el comentario de abajo y lo
+   * comprueba `tests/browser/navigation.spec.ts`—, así que cambiarlo aquí
+   * rompería las dos a la vez. La tira es lo que **añade** la tarjeta, no lo que la separa.
+   */
+  article::before {
+    background-image: var(--dot-fine);
+    background-size: var(--dot-fine-size);
+    color: var(--border-hover);
+    content: "";
+    height: 3px;
+    left: 50%;
+    position: absolute;
+    top: -2px;
+    transition:
+      color 0.2s ease,
+      filter 0.2s ease,
+      width 0.24s ease;
+    translate: -50% 0;
+    width: 34px;
+  }
+
+  article header {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .project-heading {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  article h3 {
+    color: var(--text);
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  article p {
+    color: var(--text-subtle);
+    font-size: 0.95rem;
+    line-height: 1.65;
+  }
+
+  /* El disparador ya no se dibuja: es la tarjeta. Antes era un botón con caja
+     propia al que un `::after` estiraba el área de clic; ahora se estira él, que
+     es un pseudoelemento menos para el mismo resultado. Toda la tarjeta abre el
+     diálogo con un solo tabulador y nada queda por debajo. */
+  .detail-trigger {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    border-radius: inherit;
+    cursor: pointer;
+    inset: 0;
+    padding: 0;
+    position: absolute;
+  }
+
+  /* Llegar con el tabulador cierra el filete igual que el puntero: el estado de
+     espera es el mismo, y quien navega con teclado no debería ver una tarjeta
+     menos resuelta que quien navega con ratón. */
+  article:has(.detail-trigger:focus-visible) {
+    /* Y las escuadras salen también, por lo mismo. Va aquí y no en el bloque de
+       hover porque éste vive dentro de `@media (hover: hover)`, donde un teclado
+       en una tableta no entra. */
+    --arm: 22px;
+    border-style: solid;
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+  }
+
+  .detail-trigger:focus-visible {
+    outline: none;
+  }
+
+  @media (hover: hover) {
+    /* Misma fórmula que `.bar-control` (Layout): superficie neutra, filete vivo
+       y halo. Las dos son la misma receta a propósito —si se cambia una, se
+       cambian las dos—. Hasta el 06-10-2026 eran tres, con los botones de la
+       vista Markdown.
+
+       Antes la tarjeta se teñía de acento con `--cta-fill`, que en oscuro es un
+       relleno sólido: destacaba más que el propio diálogo que abre. El acento se
+       queda donde significa algo, que es el icono de la esquina. */
+    article:hover {
+      /* 22 y no los 12 de antes: el bisel se come 8 px de cada lado de la
+         esquina, así que un brazo de 12 era esquina y cuatro píxeles. */
+      --arm: 22px;
+      background: var(--surface-hover);
+      border-color: var(--border-hover);
+      /* El filete se cierra: ver el comentario de `article`. */
+      border-style: solid;
+      box-shadow: var(--glow-hover);
+      transform: translateY(-2px);
+    }
+
+    /* El texto no se toca al pasar por encima: ni el título ni la descripción
+       cambian de color. Lo que responde es la superficie —relleno, borde y
+       halo— y el icono de la esquina, que es la señal de que la tarjeta abre
+       algo. El neón de tinta en el `h3` se probó y sobraba: con la tarjeta
+       entera encendida, teñir además el título era ruido. */
+
+    /* La tira se enciende y se alarga. `drop-shadow` y no `box-shadow`: son
+       puntos sueltos dentro de una caja transparente, así que el halo tiene que
+       seguir cada punto y no el rectángulo que los contiene. */
+    article:hover::before {
+      color: var(--accent);
+      filter: drop-shadow(0 0 5px var(--glow-ink));
+      width: 60px;
+    }
+  }
+
+  @media (width <= 700px) {
+    .project-list {
+      grid-template-columns: 1fr;
+    }
+
+    article {
+      padding: 1.1rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* El `::after` ya no está en la lista: `.instrument-frame` sólo declara su
+       transición dentro de `prefers-reduced-motion: no-preference`, así que
+       aquí no hay nada que apagar. */
+    article {
+      transition: none;
+    }
+
+    /* Las escuadras siguen apareciendo al responder: sin transición salen ya
+       puestas en vez de crecer. Quien pide menos movimiento no pide menos
+       señal. */
+
+    article:hover {
+      transform: none;
+    }
+
+    article:active {
+      scale: 1;
+    }
+  }
+
+  /**
+   * En papel el proyecto es una fila, no una tarjeta.
+   *
+   * El CV entra en una hoja, y siete tarjetas con su descripción se comían
+   * media página para repetir lo que la web cuenta mejor. Queda lo que sirve a
+   * quien lee el PDF: nombre, estado y —cuando existe— la dirección, que el
+   * `href` convierte en enlace pulsable.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    article::before {
+      transition: none;
+    }
+  }
+
+  @media print {
+    /**
+     * Una columna en papel, y eran dos.
+     *
+     * Dos columnas ahorraban alto, pero el orden visual de una rejilla no es el
+     * orden del documento: un extractor de texto lee el HTML de arriba abajo y
+     * devolvía los proyectos intercalados. Con tres proyectos en el PDF
+     * recortado el alto que costaba ya no importa.
+     */
+    .project-list {
+      gap: 0.05rem;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .project-list > li:first-child,
+    .project-list > li:last-child:nth-child(even) {
+      grid-column: auto;
+    }
+
+    /* La tira es una señal de que la tarjeta responde al puntero. En papel no
+       responde nada. Las escuadras se apagan solas: `.instrument-frame` ya se
+       anula en `@media print`, por la misma razón —convertían cada fila
+       compacta en un rectángulo que atravesaba el texto—. */
+    article::before {
+      display: none;
+    }
+
+    /* `min-width: 0` en los dos: sin él una dirección larga ensancha la celda
+       de la rejilla y el nombre del proyecto de la columna de al lado se pinta
+       encima. */
+    .project-list > li {
+      min-width: 0;
+    }
+
+    article {
+      align-items: baseline;
+      border: 0;
+      border-radius: 0;
+      flex-direction: row;
+      gap: 0.4rem;
+      min-width: 0;
+      padding: 0.1rem 0;
+    }
+
+    /* `contents` sube el título, el estado y el enlace a la fila; sin esto
+       seguirían apilados dentro de sus dos contenedores de pantalla. */
+    article header,
+    .project-heading {
+      display: contents;
+    }
+
+    /* El nombre no se encoge: si algo tiene que ceder ancho en la fila es la
+       dirección, que además se puede seguir pulsando aunque salga cortada. */
+    article h3 {
+      flex: 0 0 auto;
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
+
+    /* La insignia cierra la fila contra el margen derecho —así las siete
+       quedan alineadas entre sí— y la dirección se queda pegada al nombre. */
+    .status {
+      margin-left: auto;
+      order: 1;
+    }
+
+    .detail-trigger {
+      display: none;
+    }
+
+    /**
+     * La descripción vuelve al papel.
+     *
+     * Estaba oculta desde que la tarjeta se reducía a una fila —nombre, estado y
+     * dirección— para que las siete cupieran en dos columnas. Con tres proyectos
+     * en una sola columna el alto ya no aprieta, y la frase de cada proyecto es
+     * la única parte del bloque con palabras: un extractor que sólo encuentra
+     * «Race Hub» no sabe de qué va, y un filtro de empleo busca por palabra.
+     *
+     * `flex-basis: 100%` la baja a un renglón propio: es un elemento flex más de
+     * la fila del nombre —`header` y `.project-heading` son `display: contents`—
+     * y sin esto se metería entre el título y la insignia.
+     */
+    article p {
+      color: var(--text-muted);
+      flex: 1 0 100%;
+      font-size: 0.62rem;
+      line-height: 1.3;
+      margin: 0;
+    }
+
+    .print-link {
+      color: var(--text-muted);
+      display: block !important;
+      flex: 0 1 auto;
+      font-family: var(--font-mono);
+      font-size: 0.56rem;
+      min-width: 0;
+      overflow: hidden;
+      text-decoration: none;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+</style>
+
+<style is:global></style>

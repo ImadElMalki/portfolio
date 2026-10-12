@@ -1,0 +1,56 @@
+# build output
+dist/
+
+# El CV en PDF y su manifiesto los genera `npm run build` en cada tanda, y la
+# CI despliega los suyos: los versionados no llegaban nunca a producción y sólo
+# servían para discrepar entre Windows y Linux.
+public/cv.pdf
+public/ca/cv.pdf
+public/en/cv.pdf
+public/cv-pdf-manifest.json
+
+# generated types
+.astro/
+
+# dependencies
+node_modules/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# environment variables
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# secretos locales de las Pages Functions: es donde `wrangler pages dev` busca
+# OPENAI_API_KEY, EMAIL_API_TOKEN y RATE_LIMIT_SALT; no lo cubre una regla .env
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# bundles temporales y estado local de wrangler
+.wrangler/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# macOS-specific files
+.DS_Store
+
+# local folders
+.history
+.playwright-mcp/
+playwright-report/
+test-results/
+
+# capturas en crudo antes de pasarlas por prepare-project-shots.mjs
+.shots/
+
+# informe de Lighthouse que guarda `test:lighthouse` con LIGHTHOUSE_REPORT_DIR
+lighthouse-report/

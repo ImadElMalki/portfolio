@@ -1,0 +1,605 @@
+---
+import ArrowRight from "@/icons/arrow-right.astro"
+import type { Locale, Localized } from "@/cv"
+import { localized } from "@/lib/i18n"
+import { publicPagePath } from "@/lib/publicPages"
+import { SERVICES_COPY } from "@/data/services"
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+const say = (field: Localized) => localized(field, locale)
+---
+
+{
+  /* La vía comercial tiene panel propio bajo el hero, no un enlace más en la
+     fila de contacto: ahí competía con los tres chips de redes y nadie lo veía.
+     Vive dentro de `<Section id="hero">` a propósito —no es una sección del
+     índice y no debe salir en `SectionNav`— y no se imprime: el CV en papel no
+     lleva publicidad. */
+}
+<aside class="services-banner no-print">
+  {
+    /* La banda de disolución necesita un nodo propio: los dos pseudoelementos
+       del panel están cogidos —el halo y la tira del canto— y ésta tiene que
+       recortarse contra la caja, cosa que el halo no puede permitir porque cae
+       entero por fuera. Decorativo y sin texto, así que `aria-hidden`. */
+  }
+  <span class="banner-dissolve" aria-hidden="true"></span>
+  <div class="banner-text">
+    <p class="banner-eyebrow signal-text">{say(SERVICES_COPY.bannerEyebrow)}</p>
+    <p class="banner-pitch">{say(SERVICES_COPY.heroPitch)}</p>
+  </div>
+  <a class="banner-cta" href={publicPagePath("services", locale)}>
+    {say(SERVICES_COPY.heroServicesCta)}
+    <span class="banner-icon" aria-hidden="true">
+      <ArrowRight />
+    </span>
+  </a>
+</aside>
+
+<style>
+  /**
+   * Las cuatro esquinas de instrumento van en el **fondo del propio panel**.
+   *
+   * Cuatro corchetes de acento que marcan la caja sin cerrarla, que es lo que
+   * hace un visor y no un marco. Son ocho capas de degradado —dos rectángulos
+   * por esquina, el brazo horizontal y el vertical— dentro del `background-image`
+   * que el panel ya tenía libre: ni un nodo nuevo, y los pseudoelementos quedan
+   * para el halo y para la tira.
+   *
+   * `--banner-arm` y `--wall` son la longitud del brazo y su grosor, en un
+   * sitio, para que las ocho capas no se desincronicen al retocarlas.
+   *
+   * ## Por qué el nombre es largo
+   *
+   * Se llamaba `--arm`, y así se llaman también los corchetes de la tarjeta de
+   * proyecto y los del bloque global de
+   * `Layout.astro`. Mientras nadie lo registrara daba igual: cada componente
+   * declaraba el suyo. Pero para que el brazo **interpole** hay que registrarlo
+   * con `@property`, y `@property` no se ámbita —registra el nombre en todo el
+   * documento—, así que el `initial-value` de aquí caería sobre los otros tres.
+   * Misma nota, mismo motivo y misma solución que `--viewfinder-arm` en
+   * `Hero.astro`.
+   */
+  @property --banner-arm {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 14px;
+  }
+
+  .services-banner {
+    --banner-arm: 14px;
+    --wall: 2px;
+    align-items: center;
+    background-color: var(--surface);
+    background-image:
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent)),
+      linear-gradient(var(--accent), var(--accent));
+    background-position:
+      left 7px top 7px,
+      left 7px top 7px,
+      right 7px top 7px,
+      right 7px top 7px,
+      left 7px bottom 7px,
+      left 7px bottom 7px,
+      right 7px bottom 7px,
+      right 7px bottom 7px;
+    background-repeat: no-repeat;
+    background-size:
+      var(--banner-arm) var(--wall),
+      var(--wall) var(--banner-arm),
+      var(--banner-arm) var(--wall),
+      var(--wall) var(--banner-arm),
+      var(--banner-arm) var(--wall),
+      var(--wall) var(--banner-arm),
+      var(--banner-arm) var(--wall),
+      var(--wall) var(--banner-arm);
+    border: 1px solid var(--action-border);
+    border-radius: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.5rem;
+    justify-content: space-between;
+    /* El ancho y el margen de una sección (`Section.astro`). Desde el
+       06-10-2026 el banner no va dentro del hero sino entre Proyectos y
+       Educación, así que el aire de arriba lo pone el margen inferior de
+       Proyectos y el de abajo tiene que ponerlo él. */
+    margin: 0 auto clamp(3.75rem, 7vw, 5.5rem);
+    padding: 1.15rem 1.35rem;
+    width: min(100%, 920px);
+    position: relative;
+    transition:
+      --banner-arm 260ms cubic-bezier(0.22, 1, 0.36, 1),
+      translate 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /**
+   * Al pasar por encima, el visor se abre.
+   *
+   * Los cuatro corchetes crecen de 14 a 22 px a la vez y el panel sube dos
+   * píxeles. Es lo único que le faltaba: hasta ahora se movía solo por su
+   * cuenta —el halo respirando, la tira recorriendo el canto, el piloto
+   * latiendo— y no contestaba a nadie. Tres animaciones de ambiente y ninguna
+   * de respuesta.
+   *
+   * El gesto es el mismo que el visor del retrato del hero, y a propósito: en
+   * este sitio abrir las escuadras significa «esto se está mirando».
+   *
+   * `:focus-within` con el mismo trato, que es lo que hace que quien llega al
+   * CTA con el tabulador vea el panel encenderse igual que quien pasa el ratón.
+   * No va dentro de `@media (hover: hover)` por eso mismo.
+   */
+  .services-banner:hover,
+  .services-banner:focus-within {
+    --banner-arm: 22px;
+    translate: 0 -2px;
+  }
+
+  .services-banner:hover::before,
+  .services-banner:focus-within::before {
+    opacity: 0.9;
+  }
+
+  /**
+   * El halo, respirando.
+   *
+   * Estuvo fijo una temporada: la versión anterior iba de 0,38 a 0,72 en 9 s y
+   * el recorrido era tan lento que no se leía ni como movimiento ni como luz.
+   * Vuelve con el ciclo a 7 s, que es donde sí se percibe —la misma cadencia
+   * larga que un piloto de aparato— y con el máximo por encima del valor fijo,
+   * no por debajo: el panel gana luz al inhalar en vez de perderla.
+   *
+   * El 0,62 se queda **fuera** de la consulta como estado base. Quien pide
+   * menos movimiento se queda con el halo constante de antes, no sin halo: lo
+   * que sobra es la respiración, no la luz.
+   *
+   * La caja es transparente y el halo cae entero fuera de ella, así que aunque
+   * se pinte por encima del texto no tapa nada. `pointer-events` lo deja fuera
+   * del camino del clic al CTA.
+   */
+  .services-banner::before {
+    border-radius: inherit;
+    box-shadow: var(--glow-hover);
+    content: "";
+    inset: 0;
+    opacity: 0.62;
+    pointer-events: none;
+    position: absolute;
+    transition: opacity 220ms ease;
+  }
+
+  @media screen and (prefers-reduced-motion: no-preference) {
+    .services-banner::before {
+      animation: banner-breath 7s ease-in-out infinite;
+    }
+  }
+
+  @keyframes banner-breath {
+    0%,
+    100% {
+      opacity: 0.38;
+    }
+
+    50% {
+      opacity: 0.78;
+    }
+  }
+
+  /**
+   * La tira Glyph: una luz que recorre el canto superior del panel.
+   *
+   * Es lo único que se mueve, y va **en el canto, no sobre el texto**. Ésa es
+   * la condición que incumplían las dos versiones anteriores de este archivo
+   * —un `conic-gradient` girando por el filete y un barrido de puntos cruzando
+   * las dos líneas—, y por eso se retiraron: una luz que atraviesa el renglón
+   * mientras se lee se nota más que el mensaje.
+   *
+   * ## Por qué no hay carril apagado
+   *
+   * En un Nothing la interfaz Glyph **no se ve cuando está apagada**: son LED
+   * detrás de la carcasa. Aquí igual — los dieciocho segmentos sólo existen
+   * mientras la ventana pasa por encima. Además ahorra la capa del carril, que
+   * en un elemento enmascarado habría que sacar a otro sitio.
+   *
+   * ## Coste
+   *
+   * Se anima `mask-position`, que sí repinta. Repinta **920 × 3 px**, o sea la
+   * banda, no el panel: es la diferencia con el barrido de puntos de antes, que
+   * cubría los 920 × 90 enteros. `inset-inline: 26px` la deja además sin llegar
+   * a las esquinas, donde ya están los corchetes.
+   */
+  .services-banner::after {
+    background-image: repeating-linear-gradient(
+      to right,
+      var(--accent) 0 calc(100% / 18 - 3px),
+      transparent 0 calc(100% / 18)
+    );
+    block-size: 3px;
+    content: "";
+    inset-block-start: -2px;
+    inset-inline: 26px;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 40%,
+      #000 60%,
+      transparent
+    );
+    mask-repeat: no-repeat;
+    mask-size: 38% 100%;
+    pointer-events: none;
+    position: absolute;
+  }
+
+  @media screen and (prefers-reduced-motion: no-preference) {
+    .services-banner::after {
+      animation: banner-glyph 3.6s linear infinite;
+    }
+  }
+
+  @keyframes banner-glyph {
+    from {
+      mask-position: -38% 0;
+    }
+
+    to {
+      mask-position: 138% 0;
+    }
+  }
+
+  /**
+   * El panel se deshace y se rehace, como el retrato.
+   *
+   * Es la misma banda que recorre la foto del hero, girada un cuarto de vuelta:
+   * una franja que **cruza de izquierda a derecha** y que dentro perfora lo que
+   * hay debajo con la trama fina. La receta —trama, paso, máscara y recorrido—
+   * es la que llevaba `.portrait::after`; lo que cambia es el eje, la tinta y qué
+   * perfora.
+   *
+   * ## Por qué horizontal
+   *
+   * El retrato es una figura de 4:5 y la banda lo recorre por su lado largo.
+   * Este panel es lo contrario: 918 × 108, ocho veces más ancho que alto. Una
+   * franja vertical lo cruzaba por su lado **corto**, así que entraba y salía
+   * en un suspiro y, mientras estaba dentro, tapaba los dos renglones a la vez.
+   * De lado los recorre palabra a palabra, que es además la dirección en la que
+   * se lee y la que ya lleva la tira del canto.
+   *
+   * ## Y perfora el panel, no el texto
+   *
+   * En el retrato la banda va **encima** de la foto porque la foto es lo que
+   * tiene que deshacerse. Aquí debajo hay dos renglones que alguien está
+   * leyendo, y este archivo ya retiró dos veces un efecto por cruzarlos —ver la
+   * nota de la tira del canto—. Así que la banda se queda entre el fondo del
+   * panel y su contenido: `z-index: 0` aquí, `z-index: 1` en el texto y en el
+   * botón, que son elementos flexibles y lo respetan sin necesidad de
+   * posicionarlos. El panel se disuelve; lo que pone no.
+   *
+   * ## El recorrido lo lleva el compositor
+   *
+   * Se anima `translate` de una caja más ancha que el panel y **no**
+   * `mask-position`: la máscara se queda quieta dentro de la caja y lo que
+   * viaja es la caja. Mover la máscara obligaría a repintar los 920 × 90 px del
+   * panel en cada fotograma, que es justo el coste que la tira del canto evita
+   * limitándose a su banda de 3 px.
+   *
+   * El retardo negativo la pone en antifase con la del retrato, que mide lo
+   * mismo y arranca en el mismo instante: las dos están en pantalla a la vez en
+   * la portada, y sincronizadas se leen como una sola cosa partida en dos.
+   *
+   * ## La trama va escrita aquí y no con `--dot-fine`
+   *
+   * El token del sistema es `radial-gradient(circle, var(--dot-ink,
+   * currentColor) …)` y se declara en `:root`. Un `var()` dentro de una
+   * propiedad personalizada se sustituye **donde se declara**, no donde se usa,
+   * así que un `--dot-ink` puesto aquí abajo no llega: el token ya se resolvió
+   * arriba con su respaldo, el `currentColor` de `:root`. Salían puntos casi
+   * blancos —`rgb(238 243 239)`— y lo que se veía era una malla cruzando los
+   * renglones. Es la misma trampa que ya documenta `--glow-hover` en
+   * `Hero.astro`.
+   *
+   * El paso sí sale del sistema: `--dot-fine-size` no lleva `var()` dentro.
+   *
+   * ## Y la tinta es el acento, no el fondo
+   *
+   * Perforar con `--bg` es lo que hace el retrato, y allí funciona porque
+   * debajo hay una foto. Aquí debajo hay `--surface`, que en oscuro se
+   * diferencia del fondo en un 3 % de luminosidad: una perforación honesta sería
+   * literalmente invisible. Con el acento al 38 % la banda se lee como lo que ya
+   * dice el resto del panel —las escuadras, el piloto y la tira son acento— y no
+   * tapa el texto, que va por encima y en blanco.
+   */
+  .banner-dissolve {
+    border-radius: inherit;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    position: absolute;
+    z-index: 0;
+  }
+
+  /* Sin la consulta el panel sale limpio: el estado por defecto no perfora
+     nada, que es la regla del skill `motion-animations` —nunca dejar lo que se
+     ve dependiendo de que algo llegue a ejecutarse—. Por eso la capa entera
+     vive aquí dentro y no sólo su animación. */
+  @media screen and (prefers-reduced-motion: no-preference) {
+    .banner-dissolve::after {
+      animation: banner-dissolve 9s linear infinite;
+      animation-delay: -4.5s;
+      background-image: radial-gradient(
+        circle,
+        color-mix(in srgb, var(--accent) 38%, transparent) 1.1px,
+        transparent 1.2px
+      );
+      background-size: var(--dot-fine-size);
+      content: "";
+      inline-size: 200%;
+      inset-block: 0;
+      inset-inline-start: -50%;
+      /**
+       * La ventana ocupa el 14 % de la caja doble: unos 260 px de los 918 del
+       * panel, contando los desvanecidos.
+       *
+       * La receta del retrato —caja al 300 %, ventana del 30 % al 57 %— está
+       * calibrada para una figura de 4:5 y unos 300 px por el lado que recorre.
+       * Copiada tal cual sobre el lado corto de esta barra, la banda pasaba
+       * **fuera de la ventana un tercio del ciclo** y, cuando entraba, cubría
+       * medio panel de una vez: o no se veía nada o se veía todo. Al 200 % y por
+       * el lado largo el recorrido cruza el panel entero sin tiempo muerto, y la
+       * ventana estrecha deja una franja, no una capa.
+       */
+      mask-image: linear-gradient(
+        to right,
+        transparent 36%,
+        #000 43%,
+        #000 57%,
+        transparent 64%
+      );
+      position: absolute;
+      /* La animación no termina nunca, así que la capa se promociona una vez y
+         el recorrido lo lleva el compositor. Sin esto WebKit rerasteriza la
+         máscara en cada fotograma. */
+      will-change: translate;
+    }
+  }
+
+  /* La mitad de la caja doble: la ventana entra por el canto izquierdo y sale
+     por el derecho sin quedarse esperando fuera en ningún momento. */
+  @keyframes banner-dissolve {
+    from {
+      translate: -50% 0;
+    }
+
+    to {
+      translate: 50% 0;
+    }
+  }
+
+  .banner-text {
+    flex: 1 1 20rem;
+    min-width: 0;
+    /* Por encima de la banda. Ver su nota: aquí se lee, así que aquí no se
+       perfora. */
+    z-index: 1;
+  }
+
+  /**
+   * Con `signal-text`: el ojo también pierde señal.
+   *
+   * Estuvo fuera por competir con la tira del canto. Vuelve porque las tres
+   * cosas que se mueven aquí no comparten momento: la ráfaga son 420 ms cada 9 s
+   * y el resto del ciclo el rótulo está quieto. El retardo negativo lo separa
+   * del titular del hero (`0s`) y de la ubicación (`-3.1s`), así que las tres
+   * ráfagas nunca coinciden.
+   *
+   * La animación, su cadencia y el interruptor de `prefers-contrast: more` viven
+   * en `Layout.astro`: aquí sólo se pone la clase y el desfase.
+   */
+  .banner-eyebrow {
+    align-items: center;
+    color: var(--accent-strong);
+    display: flex;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    gap: 0.45rem;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+  }
+
+  /**
+   * El piloto de estado del ojo, delante del rótulo.
+   *
+   * Late despacio —dos segundos y medio, y sin llegar a apagarse— porque lo que
+   * dice es «esto está encendido», no «mírame». El halo lo pone el mismo
+   * `--glow-ink` que enciende el segmento activo del índice y los pilotos de los
+   * chips de contacto.
+   *
+   * Es un pseudoelemento: el ojo es un `<p>` de una línea y no hacía falta
+   * meterle un `<span>` dentro sólo para pintar un punto de 6 px.
+   */
+  .banner-eyebrow::before {
+    background: var(--accent);
+    block-size: 6px;
+    border-radius: 999px;
+    box-shadow: 0 0 8px var(--glow-ink);
+    content: "";
+    flex: 0 0 auto;
+    inline-size: 6px;
+  }
+
+  @media screen and (prefers-reduced-motion: no-preference) {
+    .banner-eyebrow::before {
+      animation: banner-led 2.5s ease-in-out infinite;
+    }
+
+    .banner-eyebrow.signal-text {
+      animation-delay: -6.2s;
+    }
+  }
+
+  @keyframes banner-led {
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  .banner-pitch {
+    color: var(--text);
+    font-weight: 600;
+    line-height: 1.5;
+    max-width: 46ch;
+    text-wrap: pretty;
+  }
+
+  /* El único relleno que grita en la portada, con el mismo par que el botón de
+     reserva de la landing. */
+  .banner-cta {
+    align-items: center;
+    /* Por encima de la banda, igual que el texto. */
+    z-index: 1;
+    background: var(--hire-fill);
+    border: 1px solid var(--hire-fill);
+    border-radius: 0.65rem;
+    color: var(--hire-text);
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 0.9rem;
+    font-weight: 700;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.65rem 1.1rem;
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.22s ease;
+  }
+
+  .banner-icon {
+    display: inline-flex;
+    transition: translate 180ms ease;
+  }
+
+  .banner-icon :global(svg) {
+    display: block;
+    height: 1rem;
+    width: 1rem;
+  }
+
+  @media (hover: hover) {
+    .banner-cta:hover {
+      border-color: var(--accent);
+      box-shadow: var(--glow-hover);
+    }
+
+    /* La flecha sale hacia donde lleva. Tres píxeles: lo justo para que se lea
+       como intención y no como que el botón se ha descuadrado. */
+    .banner-cta:hover .banner-icon {
+      translate: 3px 0;
+    }
+  }
+
+  @media (width <= 700px) {
+    .services-banner {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    /**
+     * En columna, `flex-basis` es la **altura**.
+     *
+     * La base de arriba lleva `flex: 1 1 20rem` y en fila hace lo que dice:
+     * reserva 20 rem de ancho para el texto y deja que el botón se ponga al
+     * lado. Al girar el eje, esos 20 rem pasan a medir hacia abajo, así que el
+     * bloque de texto se estiraba a 320 px de alto para ~110 px de contenido y
+     * el `space-between` del panel empujaba el botón hasta el fondo: el hueco
+     * que se veía entre el párrafo y «Servicios para negocios».
+     *
+     * `0 0 auto` y no `1 1 auto`: aquí no hay nada que repartir —el panel se
+     * mide por su contenido—, y con `auto` de base el texto ocupa lo que ocupa.
+     */
+    .banner-text {
+      flex: 0 0 auto;
+    }
+
+    .banner-cta {
+      justify-content: center;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .banner-cta {
+      transition: none;
+    }
+
+    .banner-icon,
+    .services-banner {
+      transition: none;
+    }
+
+    .services-banner:hover,
+    .services-banner:focus-within {
+      --banner-arm: 14px;
+      translate: none;
+    }
+
+    .banner-cta:hover .banner-icon {
+      translate: none;
+    }
+
+    .services-banner::before {
+      transition: none;
+    }
+
+    /**
+     * Sin movimiento, la tira se enciende **entera**.
+     *
+     * Es lo que hay que quitarle a la máscara y no a la animación: sin animar,
+     * la ventana se quedaría plantada en el 38 % izquierdo del canto y el resto
+     * de la tira desaparecería, que es peor que no tenerla. Quien pide menos
+     * movimiento no pide menos contraste.
+     */
+    .services-banner::after {
+      mask-image: none;
+    }
+  }
+
+  /* Sin cristal ni halos cuando el sistema pide más contraste: el panel se queda
+     con su borde, sus corchetes y su relleno. La tira también se para y se
+     enciende entera, por lo mismo que arriba. */
+  @media (prefers-contrast: more) {
+    .services-banner::before {
+      display: none;
+    }
+
+    /* Perforar el fondo del panel es bajarle el contraste al bloque entero, que
+       es exactamente lo que este modo no admite. */
+    .banner-dissolve {
+      display: none;
+    }
+
+    .services-banner:hover::before,
+    .services-banner:focus-within::before {
+      display: none;
+    }
+
+    .services-banner::after {
+      animation: none;
+      mask-image: none;
+    }
+
+    .banner-eyebrow::before {
+      animation: none;
+      box-shadow: none;
+    }
+  }
+</style>

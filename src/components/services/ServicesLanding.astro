@@ -1,0 +1,675 @@
+---
+import Layout from "@/layouts/Layout.astro"
+import ContactForm from "@/components/ContactForm.astro"
+import Section from "@/components/Section.astro"
+import ServicesRuntime from "@/components/services/ServicesRuntime.astro"
+import ArrowRight from "@/icons/arrow-right.astro"
+import ChevronLeft from "@/icons/chevron-left.astro"
+import { getCv, type Locale, type Localized } from "@/cv"
+import { localized, localizedPath, t } from "@/lib/i18n"
+import { publicPageHrefs } from "@/lib/publicPages"
+import { SERVICES_COPY } from "@/data/services"
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+const cv = await getCv()
+const { email, name, phone } = cv.basics
+const say = (field: Localized) => localized(field, locale)
+
+const copy = SERVICES_COPY
+/* Los ids no se traducen: son anclas, y un ancla que cambia con el idioma
+   rompería cualquier enlace compartido. `booking` además es el que reparte el
+   asistente — ver `CONTACT_URLS` en `services.ts`. */
+const SECTIONS = {
+  services: "services",
+  improvements: "improvements",
+  process: "process",
+  booking: "booking",
+} as const
+
+const ordinal = (index: number): string => String(index + 1).padStart(2, "0")
+
+/**
+ * El estudio, en el idioma que toque. Lo lee el regreso de más abajo.
+ *
+ * Vive aquí y no en un archivo de datos porque tiene un solo lector. El día que
+ * haya un segundo enlace a nineproject.es en este sitio —el pie lo va a llevar,
+ * con `rel="me"`— esto se sube a `src/data` y se importa de un sitio, que es
+ * como está resuelto `CONTACT_URLS`.
+ *
+ * Castellano en la raíz y los otros dos con prefijo, igual que aquí.
+ */
+const NINEPROJECT_URLS = {
+  es: "https://nineproject.es/",
+  ca: "https://nineproject.es/ca/",
+  en: "https://nineproject.es/en/",
+} as const satisfies Record<Locale, string>
+---
+
+<Layout
+  cv={cv}
+  locale={locale}
+  localeHrefs={publicPageHrefs("services")}
+  title={`${localized(copy.pageTitle, locale)} · ${name}`}
+  description={localized(copy.pageDescription, locale)}
+  currentPage="services"
+>
+  <main id="main" class="services">
+    <div class="lead-block">
+      {
+        /* El regreso al portfolio sube aquí y se dice como en `/sobre-mi` y
+           `/privacidad`: corchetes, versalitas mono y la flecha pegada al
+           rótulo. Estaba abajo, como un `.action` más, compitiendo con el botón
+           de escribir; y era la única de las tres landings que no se parecía a
+           las otras dos. Arriba no compite con nada y deja los dos botones para
+           lo que la página quiere que pase. */
+      }
+      {
+        /**
+         * ## Dos regresos, y sólo se pinta uno
+         *
+         * Esta página tiene dos procedencias y el mismo botón no sirve para las
+         * dos. Quien llega desde el portfolio **vuelve** al portfolio. Quien
+         * llega desde nineproject.es no vuelve a ninguna parte: iría por
+         * primera vez a un sitio que no ha visto, y el suyo era el otro.
+         *
+         * `nineproject.es` lo marca con `?from=nineproject` en el enlace
+         * (`SERVICES_DETAIL_URLS`, en aquel repositorio). Si cambia el nombre
+         * del parámetro, cambia allí y aquí.
+         *
+         * ## Por qué se pintan los dos y elige el CSS
+         *
+         * Este sitio es de salida estática: en el build no hay petición, así
+         * que `Astro.url.searchParams` está vacío y la decisión no se puede
+         * tomar en servidor. Sólo queda el cliente.
+         *
+         * Reescribir el texto con JavaScript después de cargar tampoco vale:
+         * este control está **encima del titular**, o sea a la vista desde el
+         * primer pintado, y se vería cambiar de nombre. Así que van los dos al
+         * marcado, `Layout.astro` marca `<html>` con `data-from` antes del
+         * primer pintado —en el guion en línea de su `<head>`, el mismo que pone
+         * `data-js`— y enseñar y esconder lo hace el CSS, que para entonces ya
+         * está aplicado.
+         *
+         * **La marca no se pone desde aquí, y hubo que aprenderlo.** Un
+         * `<script is:inline>` en este componente parecía lo natural y el build
+         * pasaba en verde; en el navegador lo bloqueaba la CSP: la política
+         * declara hashes, Astro no calcula el de ningún `is:inline` y este
+         * componente va detrás del `<meta>`. Los del `<head>` de `Layout.astro`
+         * corren porque van delante. Entonces no avisaba nadie: el guion
+         * sencillamente no corría y el botón se quedaba en el de por defecto.
+         * Desde el 07-10-2026 lo caza `check-build.mjs`.
+         *
+         * El escondido va con `display: none`, que además lo saca del orden de
+         * tabulación y del árbol de accesibilidad: un lector de pantalla oye un
+         * solo regreso, no dos.
+         */
+      }
+      <a
+        class="bracket-link back-link"
+        href={localizedPath(locale)}
+        data-back="portfolio"
+      >
+        <span class="bracket-link__bracket" aria-hidden="true">[</span>
+        <span class="bracket-link__icon" aria-hidden="true">
+          <ChevronLeft />
+        </span>
+        <span>{t(locale, "backToPortfolio")}</span>
+        <span class="bracket-link__bracket" aria-hidden="true">]</span>
+      </a>
+      <a
+        class="bracket-link back-link"
+        href={NINEPROJECT_URLS[locale]}
+        data-back="nineproject"
+      >
+        <span class="bracket-link__bracket" aria-hidden="true">[</span>
+        <span class="bracket-link__icon" aria-hidden="true">
+          <ChevronLeft />
+        </span>
+        <span>{t(locale, "backToNineproject")}</span>
+        <span class="bracket-link__bracket" aria-hidden="true">]</span>
+      </a>
+      <p class="eyebrow label-mono">{say(copy.bookingLead)}</p>
+      <h1>{say(copy.headline)}</h1>
+      <p class="lead">{say(copy.subheadline)}</p>
+      <div class="actions">
+        {
+          /* La acción principal no saca de la página: baja al formulario, que
+             es donde se escribe. La segunda lleva a los proyectos, que son la
+             prueba de que esto ya está construido — y se ofrece **antes** de
+             pedir nada, no al final del bloque de servicios. */
+        }
+        <a class="action action-primary" href={`#${SECTIONS.booking}`}>
+          {say(copy.bookingWriteCta)}
+        </a>
+        <a class="action" href={`${localizedPath(locale)}#projects`}>
+          <span class="action-icon" aria-hidden="true">
+            <ArrowRight />
+          </span>
+          {say(copy.projectsCta)}
+        </a>
+      </div>
+    </div>
+
+    <Section id={SECTIONS.services} title={say(copy.servicesTitle)}>
+      <ul class="cards">
+        {
+          copy.services.map((service) => (
+            <li class="card">
+              <h3>{say(service.title)}</h3>
+              <p>{say(service.body)}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </Section>
+
+    {
+      /* Las tarjetas dicen qué hago; esto dice en qué se nota. «Automatización»
+         es una categoría y no se parece a ningún problema que alguien tenga;
+         «extraer y organizar información de correos» sí, y es lo que permite
+         reconocerse en la lista. */
+    }
+    <Section id={SECTIONS.improvements} title={say(copy.improvementsTitle)}>
+      <ul class="improvements">
+        {copy.improvements.map((item) => <li>{say(item)}</li>)}
+      </ul>
+      <p class="note">{say(copy.improvementsNote)}</p>
+    </Section>
+
+    {
+      /* Qué pasa después de escribir, que es lo que esta página no contaba.
+         `<ol>` y no una fila de cajas: los pasos tienen orden y el orden es el
+         dato. Cuatro nodos por paso y no cinco —el ordinal, el título y el
+         cuerpo colocados a mano en la rejilla, sin un `div` que los envuelva—
+         porque el presupuesto de DOM de esta página va contado. */
+    }
+    <Section id={SECTIONS.process} title={say(copy.processTitle)}>
+      <ol class="process">
+        {
+          copy.process.map((step, index) => (
+            <li>
+              <p class="step-ordinal" aria-hidden="true">
+                {ordinal(index)}
+              </p>
+              <h3>{say(step.title)}</h3>
+              <p class="step-body">{say(step.body)}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </Section>
+
+    {
+      /**
+       * El bloque de reserva, sin tarjeta.
+       *
+       * Era una caja con superficie, sombra y radio de 1,1 rem alrededor de
+       * todo. De las cuatro formas de agrupar del sistema —aire, filete, borde,
+       * superficie— ésta pedía la primera: el bloque ya está separado por el
+       * encabezado de sección y por el aire de la página, y encajarlo en una
+       * tarjeta lo dejaba pareciendo un anuncio dentro del texto.
+       */
+    }
+    <Section id={SECTIONS.booking} title={say(copy.bookingTitle)}>
+      <div class="booking">
+        <p class="ask-title">{say(copy.bookingAskTitle)}</p>
+        {
+          /* Filas numeradas y no viñetas: son cuatro datos con orden, que es
+             exactamente la gramática de fila del resto del sitio —el ordinal en
+             matriz de puntos, el valor, y un filete debajo—. */
+        }
+        <ol class="ask">
+          {
+            copy.bookingAsk.map((question, index) => (
+              <li>
+                <span class="ask-ordinal" aria-hidden="true">
+                  {ordinal(index)}
+                </span>
+                <span>{say(question)}</span>
+              </li>
+            ))
+          }
+        </ol>
+
+        <ContactForm
+          locale={locale}
+          email={email}
+          phone={phone}
+          intro={say(copy.bookingFormIntro)}
+          subject={say(copy.mailSubject)}
+        />
+      </div>
+    </Section>
+  </main>
+  <ServicesRuntime />
+</Layout>
+
+<style>
+  /* El ancho y el relleno son los de `#web-view` en la portada: las dos páginas
+     comparten la barra de utilidades, así que el contenido tiene que empezar a
+     la misma altura y con el mismo margen. */
+  .services {
+    margin: 0 auto;
+    min-width: 0;
+    padding: clamp(2.25rem, 5vw, 4.75rem) clamp(1.25rem, 5vw, 3rem)
+      clamp(4rem, 8vw, 7rem);
+    width: min(100%, calc(var(--page-width) + 6rem));
+  }
+
+  .lead-block {
+    margin: 0 auto clamp(3rem, 6vw, 4.5rem);
+    max-width: var(--page-width);
+  }
+
+  /* La caja la pone `.bracket-link` en `Layout.astro`, que es donde vive el
+     control compartido por las tres landings y la portada. Aquí sólo queda el
+     hueco que lo separa de lo que viene debajo. */
+  .back-link {
+    margin-bottom: 1.75rem;
+  }
+
+  /**
+   * Cuál de los dos regresos se pinta. Ver la nota larga del marcado.
+   *
+   * El por defecto es el del portfolio, y es el que importa que sea por
+   * defecto: si el guion no llegara a ejecutarse —un bloqueador, un fallo de
+   * análisis—, lo que queda es el botón que ya había, no ninguno. El de
+   * nineproject sólo aparece cuando `<html>` viene marcado.
+   *
+   * `display: none` y no `visibility` ni `opacity`: lo que no se pinta tampoco
+   * se tabula ni se anuncia, que es justo lo que hace falta habiendo dos
+   * enlaces que dicen casi lo mismo.
+   */
+  [data-back="nineproject"] {
+    display: none;
+  }
+
+  :global(html[data-from="nineproject"]) [data-back="portfolio"] {
+    display: none;
+  }
+
+  :global(html[data-from="nineproject"]) [data-back="nineproject"] {
+    display: inline-flex;
+  }
+
+  /* Toma de `.label-mono` la familia, el cuerpo y el tracking; aquí sólo queda
+     el color, que es el del acento y no el apagado de una etiqueta cualquiera:
+     es el dato que hace que se siga leyendo —gratis, veinte minutos—. */
+  .eyebrow {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  h1 {
+    color: var(--text);
+    font-size: clamp(2.1rem, 5.5vw, 3.35rem);
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    line-height: 1.04;
+    margin-top: 0.75rem;
+    max-width: 30ch;
+    text-wrap: balance;
+  }
+
+  .lead {
+    color: var(--text-subtle);
+    font-size: clamp(1.02rem, 2vw, 1.2rem);
+    line-height: 1.5;
+    margin-top: 1rem;
+    max-width: 52ch;
+    text-wrap: pretty;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1.75rem;
+  }
+
+  /* Misma caja que los enlaces de contacto del hero: superficie, borde de 1 px,
+     44 px de alto y el neón del acento al pasar por encima. */
+  .action {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.65rem;
+    color: var(--text);
+    display: inline-flex;
+    font-size: 0.9rem;
+    font-weight: 600;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.7rem 1rem;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.22s ease,
+      color 0.2s ease,
+      transform 0.2s ease,
+      scale var(--tick);
+  }
+
+  /* El mismo chasquido que los controles de la barra. */
+  .action:active {
+    scale: 0.97;
+  }
+
+  .action-primary {
+    background: var(--hire-fill);
+    border-color: var(--hire-fill);
+    color: var(--hire-text);
+    font-size: 0.95rem;
+    padding: 0.8rem 1.25rem;
+  }
+
+  .action-icon {
+    display: inline-flex;
+  }
+
+  .action-icon :global(svg) {
+    flex: 0 0 auto;
+  }
+
+  @media (hover: hover) {
+    .action:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-hover);
+      box-shadow: var(--glow-hover);
+      transform: translateY(-1px);
+    }
+
+    .action-primary:hover {
+      background: var(--hire-fill);
+      border-color: var(--accent);
+      color: var(--hire-text);
+    }
+  }
+
+  /* Dos columnas y no tres: con un mínimo de 17 rem la rejilla dejaba huérfanas
+     en la segunda fila. A 22 rem cae en dos columnas dentro de los 920 px de la
+     página y sigue pasando a una sola en móvil. */
+  .cards {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  }
+
+  /**
+   * Con cinco tarjetas, la última se ensancha.
+   *
+   * En dos columnas, cinco dejan una sola a media fila y el hueco de al lado se
+   * lee como un fallo de maquetación. Es el mismo recurso que
+   * `.project-list > li:last-child:nth-child(even)` en `Projects.astro`, con la
+   * paridad al revés porque allí son pares y aquí impares.
+   *
+   * En una sola columna la regla se queda inerte: `grid-column: 1 / -1` sobre
+   * una rejilla de una columna no cambia nada.
+   */
+  .cards > li:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  /**
+   * Las escuadras de instrumento, como en la tarjeta de proyecto.
+   *
+   * El encuadre lo dibuja el bloque global de `Layout.astro`, que ya lleva
+   * `.cards .card` en su lista de selectores; aquí sólo se dice cuándo aparece.
+   * En reposo mide cero —la tarjeta es una caja tranquila— y se abre al
+   * responder, que es exactamente lo que hace `.project-list article`.
+   *
+   * `position: relative` no es opcional: el `::after` del encuadre va absoluto y
+   * sin esto se mediría contra la página.
+   */
+  .card {
+    --arm: 0px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.9rem;
+    box-shadow: var(--shadow-raised);
+    padding: 1.15rem 1.25rem;
+    position: relative;
+  }
+
+  .card:focus-within {
+    --arm: 18px;
+  }
+
+  @media (hover: hover) {
+    .card:hover {
+      --arm: 18px;
+    }
+  }
+
+  .card h3 {
+    color: var(--text);
+    font-size: 1.02rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .card p {
+    color: var(--text-subtle);
+    font-size: 0.92rem;
+    line-height: 1.5;
+    margin-top: 0.45rem;
+    text-wrap: pretty;
+  }
+
+  /**
+   * Nueve encargos a dos columnas, con `columns` y no con `grid`.
+   *
+   * Nueve es impar: una rejilla de dos columnas deja el último hueco vacío y hay
+   * que corregirlo con una regla más. `columns` reparte cinco y cuatro él solo,
+   * respeta el orden de lectura vertical y no cuesta ni un nodo. `break-inside`
+   * evita que una frase de dos líneas se parta entre columnas.
+   */
+  .improvements {
+    column-gap: 2.5rem;
+    columns: 2;
+    margin-top: 0.2rem;
+  }
+
+  .improvements li {
+    break-inside: avoid;
+    color: var(--text-subtle);
+    line-height: 1.5;
+    padding-block: 0.35rem;
+    padding-inline-start: 1.15rem;
+    position: relative;
+  }
+
+  /* Viñeta en matriz de puntos —cuatro puntos de 4 px— y no un `list-style`: es
+     la misma trama que la banda del panel de negocios y el fondo de la consola.
+     Escrita aquí y no con `--dot-fine` porque ese token resuelve su tinta en
+     `:root`, donde `--dot-ink` no llega; ver la nota de `ServicesBanner.astro`. */
+  .improvements li::before {
+    background-image: radial-gradient(
+      circle,
+      var(--accent) 1.1px,
+      transparent 1.2px
+    );
+    background-size: var(--dot-fine-size);
+    block-size: 8px;
+    content: "";
+    inline-size: 8px;
+    inset-block-start: 0.7em;
+    inset-inline-start: 0;
+    position: absolute;
+  }
+
+  /* La frase que quita el miedo a escribir sin tener nada decidido, en su propia
+     banda. Filete de acento a la izquierda: el mismo recurso con el que el sitio
+     marca una cita, y dos píxeles y no cuatro porque el filete lateral de cuatro
+     está vetado en el build —ver `check-build.mjs`—. */
+  .note {
+    border-inline-start: 2px solid var(--accent);
+    color: var(--text-muted);
+    line-height: 1.65;
+    margin-top: 1.75rem;
+    max-width: 46ch;
+    padding-inline-start: 1rem;
+    text-wrap: pretty;
+  }
+
+  /**
+   * Los cuatro pasos: ordinal a la izquierda, título y cuerpo a la derecha.
+   *
+   * La colocación va explícita y no por flujo automático. Con tres hijos y dos
+   * columnas, el reparto por defecto manda el cuerpo a la primera columna,
+   * debajo del ordinal; nombrando las tres áreas el ordinal ocupa las dos filas
+   * y el texto se queda entero en la segunda columna.
+   */
+  .process {
+    margin-top: 0.2rem;
+  }
+
+  .process li {
+    border-top: 1px solid var(--border);
+    display: grid;
+    gap: 0 1.25rem;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    padding-block: 1.15rem;
+  }
+
+  /* En matriz de puntos, igual que el ordinal de las filas de abajo: es una
+     cifra de instrumento y para eso está Doto. */
+  .step-ordinal {
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    grid-area: 1 / 1 / span 2 / auto;
+    letter-spacing: var(--label-tracking);
+    padding-top: 0.15rem;
+  }
+
+  .process h3 {
+    color: var(--text);
+    font-size: 1.02rem;
+    font-weight: 700;
+    grid-area: 1 / 2;
+    letter-spacing: -0.02em;
+  }
+
+  .step-body {
+    color: var(--text-subtle);
+    grid-area: 2 / 2;
+    line-height: 1.6;
+    margin-top: 0.35rem;
+    max-width: 62ch;
+    text-wrap: pretty;
+  }
+
+  /* Sin caja: lo que agrupa es el aire y el encabezado de sección. */
+  .booking {
+    max-width: 34rem;
+  }
+
+  .ask-title {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .ask {
+    display: grid;
+    gap: 0;
+    margin-top: 0.8rem;
+  }
+
+  /**
+   * Fila de datos, la misma que las certificaciones y los idiomas: ordinal a la
+   * izquierda, valor, y un filete debajo.
+   *
+   * Antes eran viñetas con un punto de acento. Cuatro puntos rojos seguidos
+   * pesaban como una lista de argumentos de venta, y esto es una ficha: lo que
+   * hace falta poner en el mensaje.
+   */
+  .ask li {
+    align-items: baseline;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-subtle);
+    display: grid;
+    gap: 0 0.75rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 0.55rem 0.15rem;
+  }
+
+  /* En matriz de puntos, como el índice de cada sección: es una cifra de
+     instrumento y para eso está Doto. */
+  .ask-ordinal {
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--label-tracking);
+  }
+
+  .booking :global(.contact) {
+    margin-top: 1.6rem;
+  }
+
+  /* Una columna para los nueve encargos: a partir de aquí dos dejan renglones de
+     cuatro palabras. */
+  @media (width <= 620px) {
+    .improvements {
+      columns: 1;
+    }
+  }
+
+  /* Y el ordinal del proceso se pone encima de su paso, igual que hace la
+     política de privacidad con los suyos. */
+  @media (width <= 520px) {
+    .process li {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .step-ordinal,
+    .process h3,
+    .step-body {
+      grid-area: auto;
+    }
+  }
+
+  @media (width <= 480px) {
+    .actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .action {
+      justify-content: center;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .action {
+      transition: none;
+    }
+
+    .action:hover {
+      transform: none;
+    }
+
+    .action:active {
+      scale: 1;
+    }
+  }
+
+  /* Sin cristal ni halos cuando el sistema pide contraste o menos
+     transparencia, igual que la barra y los diálogos. */
+  @media (prefers-contrast: more) {
+    .card {
+      border-color: var(--text-muted);
+      box-shadow: none;
+    }
+
+    .action:hover {
+      box-shadow: none;
+    }
+  }
+</style>

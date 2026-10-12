@@ -1,0 +1,16 @@
+# LF en el repositorio y también en el árbol de trabajo, incluso en Windows.
+#
+# Con `core.autocrlf=true` y sin este archivo, cualquier checkout, `stash pop`
+# o cambio de rama dejaba ficheros en CRLF: Prettier los marcaba enteros y todo
+# hash calculado sobre el árbol salía distinto del de la CI. Así nació el aviso
+# de deriva de los PDF que saltaba en cada ejecución con los PDF idénticos.
+* text=auto eol=lf
+
+# Binarios: ni conversión de finales de línea ni diff de texto.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff2 binary

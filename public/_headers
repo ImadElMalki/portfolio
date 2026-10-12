@@ -1,0 +1,81 @@
+# Cabeceras HTTP para Cloudflare Pages.
+#
+# El sitio es estático salvo `/api/*`: las cabeceras que devuelven los endpoints
+# de `src/pages` se descartan durante el build (Astro solo escribe el cuerpo a
+# disco), así que CORS, caché y seguridad se declaran aquí.
+#
+# Lo de aquí vale para los archivos, y **sólo** para los archivos: la
+# documentación de Pages es explícita en que estas reglas no se aplican a lo que
+# responde una Function, aunque la URL case. Las cabeceras de `/api/hit`,
+# `/api/contact` y `/api/ask` las escribe `src/lib/apiResponse.ts`, y hay que
+# tocarlas ahí.
+#
+# La CSP con los hashes de cada script y estilo la genera Astro
+# (`security.csp` en astro.config.mjs) y viaja en un <meta> del <head>. Aquí solo
+# va lo que un <meta> no admite: HSTS y `frame-ancestors`. Las dos políticas se
+# aplican a la vez y se intersecan, así que la de aquí no relaja la otra.
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+
+# Los assets llevan hash en el nombre: cambian de URL al cambiar de contenido.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# El CV en JSON Resume está pensado para que lo consuman otras herramientas.
+/cv.json
+  Content-Type: application/json; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+
+/*/cv.json
+  Content-Type: application/json; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+
+/cv.md
+  Content-Type: text/markdown; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+
+/*/cv.md
+  Content-Type: text/markdown; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+
+# El PDF lo genera cada `npm run build` (no se versiona desde el 30-09-2026), así
+# que cambia con el despliegue, no en cada visita. Sin `Content-Disposition`: el enlace ya
+# lleva `download`, y así la misma dirección sigue sirviendo para abrirlo en el
+# visor del navegador.
+/cv.pdf
+  Content-Type: application/pdf
+
+/*/cv.pdf
+  Content-Type: application/pdf
+
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+
+/*/llms.txt
+  Content-Type: text/plain; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+
+# `pages.dev` sirve el mismo sitio que `imadelmalki.com`, y cada rama de PR tiene
+# además su propio subdominio. El canonical ya apunta al dominio propio, pero una
+# copia que sirve 200 sigue siendo rastreable: `noindex` la deja fuera sin tocar
+# lo que se publica. Son los dos patrones que documenta Cloudflare Pages.
+https://:project.pages.dev/*
+  X-Robots-Tag: noindex
+
+https://:version.:project.pages.dev/*
+  X-Robots-Tag: noindex

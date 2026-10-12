@@ -1,0 +1,1721 @@
+---
+import { Image } from "astro:assets"
+
+import type { CvData, Locale, ProjectLinkKind } from "@/cv"
+import type { ProjectDemo, ShotShape } from "@/data/projectDemos"
+import { caseStudyOf } from "@/data/caseStudies"
+import { projectPagePath } from "@/lib/publicPages"
+import { projectStatusLabel } from "@/lib/cvFormat"
+import { localized, t } from "@/lib/i18n"
+import { technologyDefinition } from "@/lib/techIcons"
+import ArrowRight from "@/icons/arrow-right.astro"
+import Close from "@/icons/close.astro"
+import GitHub from "@/icons/GitHub.astro"
+import WorldMap from "@/icons/WorldMap.astro"
+import Store from "@/icons/store.astro"
+import type { AstroIcon } from "@/types"
+
+/** El mismo contrato validado e inferido que usa el resto del CV. */
+type Project = CvData["projects"][number]
+
+interface Props {
+  id: string
+  project: Project
+  demo?: ProjectDemo
+  locale: Locale
+  /**
+   * La misma ficha, como página y no como diálogo.
+   *
+   * `/proyectos/<id>/` sirve este mismo contenido en un `<article>`: sin
+   * `<dialog>`, sin botón de cerrar y con el título en `<h1>`, que es el único
+   * de esa página. El visor de capturas tampoco viaja —su guion vive en
+   * `ProjectDialogRuntime.astro` y sólo se monta donde hay una lista
+   * `[data-project-details]`—, así que
+   * las capturas se pintan enteras en la propia página en vez de esconderse
+   * detrás de un botón que no haría nada.
+   */
+  standalone?: boolean
+}
+
+const { id, project, demo, locale, standalone = false } = Astro.props
+const { highlights, links, name, overview, status, technologies } = project
+const visibleName = localized(name, locale)
+
+/* `Record<ProjectLinkKind, …>` y no el `IconMap` laxo: las claves salen del
+   `z.enum` del esquema, no de datos libres. Con el mapa genérico, añadir un
+   cuarto `kind` compilaba y pintaba el enlace sin icono; así no compila. */
+const LINK_ICONS: Record<ProjectLinkKind, AstroIcon> = {
+  website: WorldMap,
+  store: Store,
+  source: GitHub,
+}
+
+const lightboxId = `${id}-lightbox`
+
+/**
+ * El caso de estudio, si lo hay, y sólo en la página.
+ *
+ * En el diálogo de la portada no cabe —lo vigila «fits every project dialog»,
+ * que exige que la ficha entre sin desplazarse a 1280×900— y tampoco encaja:
+ * el diálogo es para echar un vistazo, y mil palabras ahí son una pared. En su
+ * lugar, el diálogo enlaza a esta página.
+ */
+const study = caseStudyOf(project.id)
+const caseStudy = standalone ? study : undefined
+
+/* Y en el diálogo, el enlace a la ficha entera: sólo si hay caso que leer. Sin
+   él, la ficha dice lo mismo que ya se está viendo. */
+const fullCaseHref =
+  !standalone && study ? projectPagePath(project.id, locale) : null
+
+/* Etiquetas que cambian entre las dos formas de la ficha. El diálogo cuelga de
+   una sección con `h2`/`h3`, así que su título es un `h4`; la página no tiene
+   nada por encima y su título es el `h1` único que exige `check-build.mjs`. */
+const Root = standalone ? "article" : "dialog"
+const Title = standalone ? "h1" : "h4"
+const ShotFrame = standalone ? "div" : "button"
+
+/**
+ * Anchos servidos por forma.
+ *
+ * El ancho mayor del visor coincide con el del máster que produce
+ * `scripts/prepare-project-shots.mjs`, y `format`/`quality` son idénticos en
+ * miniatura y visor. `astro:assets` indexa por fuente + opciones, así que la
+ * variante que pide el visor es un archivo que la tira ya emitía: ampliar no
+ * descarga nada nuevo en pantallas 1×.
+ *
+ * `sizes` va en longitud fija y no en `vw` porque el visor está limitado por
+ * altura —es la fila flexible de un grid— y `sizes` no sabe expresar un ancho
+ * derivado del alto.
+ */
+const SERVING: Record<
+  ShotShape,
+  {
+    widths: number[]
+    thumbSizes: string
+    boxSizes: string
+  }
+> = {
+  phone: {
+    widths: [300, 600, 720],
+    thumbSizes: "300px",
+    boxSizes: "360px",
+  },
+  popup: {
+    widths: [300, 600, 768],
+    thumbSizes: "300px",
+    boxSizes: "384px",
+  },
+  browser: {
+    widths: [440, 880, 1280],
+    thumbSizes: "440px",
+    boxSizes: "(max-width: 900px) 92vw, 1000px",
+  },
+}
+
+const shots = (demo?.shots ?? []).map((shot, index) => {
+  const shape = shot.shape ?? demo?.shape
+  if (!shape) throw new Error(`Project shot ${index} has no shape`)
+
+  return { ...shot, index, shape }
+})
+
+/** El anuncio del lector de pantalla se compone aquí: el script no traduce. */
+const announce = (index: number, caption: string) =>
+  `${t(locale, "shotPosition")
+    .replace("{n}", String(index + 1))
+    .replace("{total}", String(shots.length))}: ${caption}`
+---
+
+<Fragment>
+  {/* El detalle completo del proyecto: la tarjeta solo enseña el gancho. */}
+  {
+    /* `aria-labelledby` sí, `aria-describedby` **no**, y es deliberado.
+     La guía de la APG lo recomienda para diálogos con una descripción corta y
+     fija; aquí apuntaría al párrafo de `overview`, que es el texto principal y
+     puede tener cuatro líneas. Un lector de pantalla lo leería entero al abrir
+     —antes de dejar navegar— y otra vez al llegar a él, o sea el contenido
+     duplicado a cambio de nada: ese párrafo ya es lo primero que hay tras la
+     cabecera. El nombre del diálogo lo da el título, que es lo que hace falta
+     para saber dónde se ha entrado. */
+  }
+  <Root
+    id={standalone ? undefined : id}
+    class:list={["detail", standalone && "detail-standalone"]}
+    data-detail={standalone ? undefined : true}
+    data-status={status}
+    aria-labelledby={standalone ? undefined : `${id}-title`}
+  >
+    <div class="detail-panel">
+      <header>
+        <div class="detail-heading">
+          {
+            /* `tabindex="-1"` + `autofocus`: el foco de apertura va al título y no
+            al botón de cerrar, que es donde estaba. Lo primero que oía un lector
+            de pantalla al abrir el detalle de un proyecto era «Cerrar el
+            detalle», o sea la salida antes que el contenido. El `-1` lo hace
+            enfocable por guion sin meterlo en el orden de tabulación.
+
+            Nada de eso aplica en la página: no hay apertura que anunciar, y un
+            `autofocus` en el encabezado le robaría el primer tabulador a la
+            navegación. */
+          }
+          <Title
+            id={`${id}-title`}
+            tabindex={standalone ? undefined : "-1"}
+            autofocus={standalone ? undefined : true}
+          >
+            {visibleName}
+          </Title>
+          <span class="status">{projectStatusLabel(status, locale)}</span>
+        </div>
+        {
+          !standalone && (
+            <button
+              type="button"
+              class="detail-close"
+              data-detail-close
+              aria-label={t(locale, "closeDetail")}
+              title={t(locale, "closeDetail")}
+            >
+              <Close />
+            </button>
+          )
+        }
+      </header>
+
+      {
+        /* `tabindex="0"` sólo en la página, y no por gusto.
+              La tira se desplaza en horizontal. Dentro del diálogo cada captura
+              es un `<button>`, así que el teclado ya entra y arrastra el scroll
+              al enfocar. En la página no hay visor, las capturas dejan de ser
+              botones y la tira se queda sin una sola parada de tabulación: axe
+              lo marca como `scrollable-region-focusable` (grave) y tiene razón
+              — sin esto, quien navegue con teclado no puede ver más allá de la
+              primera captura. */
+      }
+      {
+        demo && (
+          <ul
+            class="shots"
+            role="list"
+            tabindex={standalone ? "0" : undefined}
+            aria-label={`${t(locale, "demoScreens")} ${visibleName}`}
+          >
+            {shots.map((shot) => (
+              <li>
+                <figure>
+                  {/* El pie queda fuera del botón: el nombre accesible se mantiene
+                    corto y el texto sigue siendo seleccionable. */}
+                  <ShotFrame
+                    type={standalone ? undefined : "button"}
+                    class:list={[standalone ? "shot-static" : "shot-trigger"]}
+                    data-lightbox-open={standalone ? undefined : lightboxId}
+                    data-lightbox-index={
+                      standalone ? undefined : String(shot.index)
+                    }
+                    data-lightbox-announce={
+                      standalone
+                        ? undefined
+                        : announce(shot.index, localized(shot.caption, locale))
+                    }
+                    data-lightbox-caption={
+                      standalone ? undefined : localized(shot.caption, locale)
+                    }
+                    data-lightbox-shape={standalone ? undefined : shot.shape}
+                    data-lightbox-sizes={
+                      standalone ? undefined : SERVING[shot.shape].boxSizes
+                    }
+                    aria-haspopup={standalone ? undefined : "dialog"}
+                    aria-label={
+                      standalone
+                        ? undefined
+                        : `${t(locale, "enlargeShot")}: ${localized(shot.caption, locale)}`
+                    }
+                  >
+                    <span class="frame" data-shape={shot.shape}>
+                      <Image
+                        src={shot.src}
+                        alt={localized(shot.alt, locale)}
+                        widths={SERVING[shot.shape].widths}
+                        sizes={SERVING[shot.shape].thumbSizes}
+                        format="webp"
+                        quality={80}
+                        loading="lazy"
+                        decoding="async"
+                        draggable={false}
+                      />
+                    </span>
+                  </ShotFrame>
+                  <figcaption>{localized(shot.caption, locale)}</figcaption>
+                </figure>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+
+      <p class="detail-description">{localized(overview, locale)}</p>
+
+      {
+        localized(highlights, locale).length > 0 && (
+          <ul class="highlights">
+            {localized(highlights, locale).map((highlight) => (
+              <li>{highlight}</li>
+            ))}
+          </ul>
+        )
+      }
+
+      {
+        caseStudy && (
+          <div class="case">
+            <section class="case-block">
+              <h2>{t(locale, "caseContext")}</h2>
+              <p>{localized(caseStudy.context, locale)}</p>
+            </section>
+
+            <section class="case-block">
+              <h2>{t(locale, "caseRole")}</h2>
+              <p>{localized(caseStudy.role, locale)}</p>
+            </section>
+
+            <section class="case-block">
+              <h2>{t(locale, "caseDecisions")}</h2>
+              <ol class="case-decisions">
+                {caseStudy.decisions.map((decision) => (
+                  <li>
+                    <h3>{localized(decision.title, locale)}</h3>
+                    <p>{localized(decision.why, locale)}</p>
+                  </li>
+                ))}
+              </ol>
+            </section>
+
+            <section class="case-block">
+              <h2>{t(locale, "caseOutcome")}</h2>
+              <ul class="case-outcome">
+                {caseStudy.outcome.map((line) => (
+                  <li>{localized(line, locale)}</li>
+                ))}
+              </ul>
+            </section>
+
+            <section class="case-block">
+              <h2>{t(locale, "caseLessons")}</h2>
+              <p>{localized(caseStudy.lessons, locale)}</p>
+            </section>
+          </div>
+        )
+      }
+
+      <footer>
+        <ul
+          class="technologies"
+          aria-label={`${t(locale, "technologiesOf")} ${visibleName}`}
+        >
+          {
+            technologies.map((technology) => {
+              /* El ID estable conduce icono y color; el texto sigue siendo
+               contenido visible y puede cambiar sin romper esa relación. El mapa
+               de colores es el bloque global de `Skills.astro`. */
+              const definition = technologyDefinition(technology)
+              const Icon = definition?.Icon
+
+              return (
+                <li data-tech={definition?.id}>
+                  {Icon && (
+                    <span class="technology-icon" aria-hidden="true">
+                      <Icon />
+                    </span>
+                  )}
+                  {technology}
+                </li>
+              )
+            })
+          }
+        </ul>
+
+        {
+          links && links.length > 0 && (
+            <nav aria-label={`${t(locale, "linksOf")} ${visibleName}`}>
+              {links.map(({ label, url, kind }) => {
+                const Icon = LINK_ICONS[kind]
+                const text = localized(label, locale)
+
+                return (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`${t(locale, "openLink")} ${text}`}
+                  >
+                    {Icon && (
+                      <span class="link-icon" aria-hidden="true">
+                        <Icon />
+                      </span>
+                    )}
+                    {text}
+                  </a>
+                )
+              })}
+            </nav>
+          )
+        }
+
+        {
+          fullCaseHref && (
+            <a class="full-case" href={fullCaseHref}>
+              {t(locale, "caseReadFull")}
+              <span class="full-case-arrow" aria-hidden="true">
+                <ArrowRight />
+              </span>
+            </a>
+          )
+        }
+      </footer>
+    </div>
+  </Root>
+
+  {
+    /* Hermano del detalle, no anidado: cada diálogo conserva un solo `autofocus` y
+    los clics del visor no burbujean hasta el manejador de fondo del detalle.
+    `showModal()` con el detalle abierto apila en la capa superior, así que Esc
+    cierra primero el visor y devuelve el foco a la miniatura que lo abrió. */
+  }
+  {
+    demo && !standalone && (
+      <dialog
+        id={lightboxId}
+        class="lightbox"
+        data-lightbox
+        aria-labelledby={`${lightboxId}-title`}
+      >
+        <div class="lightbox-panel">
+          <div class="lightbox-bar">
+            {/* El foco de apertura, por lo mismo que en el detalle: el título
+              antes que el botón de salir. Las flechas siguen funcionando desde
+              aquí — el oyente está en el diálogo y el evento burbujea. */}
+            <p
+              class="lightbox-title"
+              id={`${lightboxId}-title`}
+              tabindex="-1"
+              autofocus
+            >
+              {`${t(locale, "demoScreens")} ${visibleName}`}
+            </p>
+            <p class="lightbox-counter" aria-hidden="true">
+              <span data-lightbox-current>1</span> / {shots.length}
+            </p>
+            <button
+              type="button"
+              class="lightbox-close"
+              data-lightbox-close
+              aria-label={t(locale, "closeShot")}
+              title={t(locale, "closeShot")}
+            >
+              <Close />
+            </button>
+          </div>
+
+          <figure class="lightbox-figure">
+            <span class="frame" data-lightbox-frame>
+              <img data-lightbox-image alt="" decoding="async" />
+            </span>
+            <figcaption class="slide-caption" data-lightbox-caption />
+          </figure>
+
+          <div class="lightbox-nav">
+            <button
+              type="button"
+              class="nav-button"
+              data-lightbox-prev
+              aria-disabled="true"
+              aria-label={t(locale, "previousShot")}
+              title={t(locale, "previousShot")}
+            >
+              <ArrowRight />
+            </button>
+            <button
+              type="button"
+              class="nav-button"
+              data-lightbox-next
+              aria-label={t(locale, "nextShot")}
+              title={t(locale, "nextShot")}
+            >
+              <ArrowRight />
+            </button>
+          </div>
+
+          <p
+            class="sr-only"
+            role="status"
+            aria-live="polite"
+            data-lightbox-status
+          />
+        </div>
+      </dialog>
+    )
+  }
+</Fragment>
+
+<style>
+  /* Sin relleno ni fondo en el <dialog>: su caja coincide con el panel, así un
+     clic cuyo target sea el propio diálogo solo puede venir del backdrop y el
+     script de cierre no necesita medir geometría.
+
+     Esa misma coincidencia es la que deja poner aquí el encuadre de escuadras
+     (`.instrument-frame`) en vez de en `.detail-panel`: el panel es el
+     contenedor con scroll, así que un pseudo-elemento suyo se desplazaría con
+     el contenido y las escuadras se irían de la esquina. El diálogo modal ya
+     es `fixed`, así que el contexto de posicionamiento viene puesto. */
+  .detail {
+    background: transparent;
+    border: 0;
+    color: var(--text);
+    max-height: none;
+    max-width: none;
+    padding: 0;
+  }
+
+  /* `/project-details/#project-*`: `:target` convierte la ficha enlazada en
+     contenido normal y navegable, con JavaScript o sin él. En la portada
+     el hash público usa `#proyecto/…`, así que esta regla no interfiere con el
+     diálogo modal cargado de forma diferida. */
+  .detail:target {
+    display: block;
+    margin: 1rem auto;
+    position: static;
+  }
+
+  /**
+   * La misma ficha servida como página, en `/proyectos/<id>/`.
+   *
+   * Hereda todo lo de dentro del panel —cabecera, capturas, highlights,
+   * tecnologías, enlaces— y sólo deshace lo que era propio del diálogo:
+   *
+   * - El panel deja de tener techo de altura y scroll interno. En un modal el
+   *   scroll es del panel porque el fondo no se puede mover; en una página el
+   *   scroll es de la página, y dejar los dos produce la caja que se desplaza
+   *   dentro de otra que también se desplaza.
+   * - La cabecera deja de ser pegajosa. Era pegajosa contra el canto del área
+   *   desplazable del panel, que aquí ya no existe: sin esto se quedaría clavada
+   *   a media pantalla.
+   * - Los márgenes negativos que estiraban el fondo de esa cabecera hasta el
+   *   borde del panel se van con ella.
+   */
+  .detail-standalone {
+    display: block;
+    margin-inline: auto;
+  }
+
+  .detail-standalone .detail-panel {
+    max-block-size: none;
+    overflow-y: visible;
+  }
+
+  .detail-standalone header {
+    /* La sombra de la cabecera del diálogo es el sangrado sobre el relleno del
+       panel. Aquí no hay panel ni relleno que tapar, y el fondo de la página no
+       es el del diálogo: dejarla pintaría una banda sobre el título. */
+    box-shadow: none;
+    margin-inline: 0;
+    padding-block: 0 0.35rem;
+    padding-inline: 0;
+    position: static;
+  }
+
+  /* El `<h1>` de la página pide más cuerpo que el `<h4>` del diálogo, pero no
+     el de la portada: aquí el nombre del proyecto es el título, no la marca. */
+  .detail-standalone h1 {
+    color: var(--text);
+    font-size: 1.45rem;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  /* La captura sin visor: la misma caja que la miniatura del diálogo, pero sin
+     nada que pulsar. No hay `cursor`, ni `hover`, ni anillo de foco, porque no
+     es un control. */
+  .shot-static {
+    display: block;
+  }
+
+  /* El arrastre de la tira lo engancha `ProjectDialogRuntime.astro`, que no se monta en esta
+     página: sin esto la mano abierta prometería un gesto que nadie escucha. La
+     tira sigue desplazándose con rueda, dedo y teclado. */
+  .detail-standalone .shots {
+    cursor: auto;
+  }
+
+  /* La tira es una parada de tabulación en la página, así que tiene que verse
+     cuando le toca. Mismo anillo que el resto de controles del sitio. */
+  .detail-standalone .shots:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+    border-radius: 0.4rem;
+  }
+
+  /* Más opaco que antes (0.62) para que el panel destaque: con el fondo a medias
+     el contenido de detrás competía con el diálogo. El color sale del token
+     porque el velo tiene que cambiar con el tema — ver `--modal-veil`. */
+  .detail::backdrop {
+    background: var(--modal-veil);
+  }
+
+  /* El desenfoque compone una capa a pantalla completa, así que se queda en
+     escritorio, igual que el de la barra de utilidades. */
+  @media (width >= 900px) {
+    .detail::backdrop {
+      backdrop-filter: blur(3px);
+    }
+  }
+
+  .detail-panel {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--modal-radius);
+    /* Aro de acento sobre la sombra: separa el panel del fondo oscurecido sin
+       engordar el borde. */
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
+      var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    inline-size: min(100vw - 2rem, 46rem);
+    margin: auto;
+    max-block-size: min(90dvh, 46rem);
+    overflow-y: auto;
+    padding: 1.1rem;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+    scrollbar-width: thin;
+  }
+
+  .detail-panel::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .detail-panel::-webkit-scrollbar-track {
+    background: transparent;
+    margin-block: 0.85rem;
+  }
+
+  .detail-panel::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 999px;
+  }
+
+  .detail-panel::-webkit-scrollbar-button,
+  .shots::-webkit-scrollbar-button {
+    display: none;
+  }
+
+  /**
+   * Pegajosa, y quieta desde el primer píxel.
+   *
+   * `.detail-panel` es el contenedor con scroll, así que sin esto el botón de
+   * cerrar se iba de la vista en cuanto el contenido desbordaba y había que
+   * volver arriba para cerrar.
+   *
+   * El `top` era `-1.1rem` —el relleno del panel en negativo—, y eso hacía que
+   * la cabecera subiera ese centímetro antes de engancharse: en un teléfono, con
+   * el pulgar ya moviendo el contenido, se veía el título dar un salto hacia
+   * arriba y pararse. Lo que tiene que moverse es lo que hay debajo de la
+   * cabecera, no la cabecera.
+   *
+   * Con `top: 0` se engancha en el canto del área desplazable, o sea pegada al
+   * borde del panel; el margen negativo **horizontal** y el relleno que lo
+   * compensa son lo que estira su fondo hasta ese borde para que el contenido no
+   * se vea pasar por el hueco del relleno.
+   *
+   * ## El sangrado de arriba es una sombra, y no un margen negativo
+   *
+   * Hasta el 11-09-2026 el de arriba también era un margen negativo
+   * (`margin-block-start: -1.1rem`), y con `top: 0` los dos se peleaban: el
+   * margen sube la cabecera 1,1 rem por encima del área desplazable y el `top`
+   * la vuelve a bajar hasta el canto. El desplazamiento es **permanente**, no
+   * sólo al hacer scroll, así que la cabecera quedaba 17,6 px por debajo de su
+   * sitio en el flujo y se comía entero el hueco de 0,85 rem que el panel deja
+   * entre sus hijos: medido, la tira de capturas empezaba **4 px por encima** del
+   * canto inferior de la cabecera, o sea tapada por ella, y la fila de puntos
+   * quedaba pegada a las imágenes sin un respiro.
+   *
+   * La sombra hace el mismo sangrado sin tocar la disposición: pinta el
+   * rectángulo de la cabecera desplazado 1,1 rem hacia arriba, que es justo el
+   * relleno del panel, y el recorte del contenedor con scroll la para en el
+   * borde. La cabecera vuelve a ocupar su sitio en el flujo, el hueco reaparece,
+   * y ni el título se mueve ni vuelve el salto que motivó el `top: 0`.
+   */
+  .detail header {
+    align-items: flex-start;
+    background: var(--surface-raised);
+    box-shadow: 0 -1.1rem 0 var(--surface-raised);
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    margin-inline: -1.1rem;
+    padding-block: 1.45rem 0.35rem;
+    padding-inline: 1.1rem;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  /**
+   * La cabecera se separa con una fila de puntos, no con un filete.
+   *
+   * Es el mismo recurso que marca el canto de la tarjeta de proyecto y las
+   * viñetas de los `highlights`, así que la cabecera del diálogo deja de ser la
+   * única pieza del panel sin la tira. Y hace un segundo trabajo: la cabecera
+   * es pegajosa, y un filete sólido a media altura del panel se confundía con
+   * el borde de la caja mientras el contenido se desplazaba por debajo.
+   *
+   * El tono va por `color` y no por `--dot-ink`: el `var()` de dentro de
+   * `--dot-fine` se sustituye donde el token se **declara**, en `:root`, así que
+   * escribir `--dot-ink` aquí no llega a tiempo. Está documentado largo en
+   * `Projects.astro`.
+   *
+   * `position: sticky` ya crea el contexto de posicionamiento, así que no hace
+   * falta un `relative` de más.
+   */
+  .detail header::after {
+    background-image: var(--dot-fine);
+    background-size: var(--dot-fine-size);
+    block-size: 3px;
+    color: var(--border-hover);
+    content: "";
+    inset-block-end: 0;
+    inset-inline: 0;
+    position: absolute;
+  }
+
+  /* Los dos títulos reciben el foco al abrir su diálogo, pero no están en el
+     orden de tabulación: nadie llega aquí con el teclado, así que el anillo sólo
+     sería un recuadro inexplicable sobre un texto que no hace nada. El anillo se
+     mantiene en todo lo que sí es alcanzable. */
+  .detail-heading h4:focus,
+  .lightbox-title:focus {
+    outline: none;
+  }
+
+  .detail-heading {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .detail h4 {
+    color: var(--text);
+    font-size: 1.15rem;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  /* Más pequeño y más visible: 32 px con borde e icono de acento, en vez de los
+     44 transparentes con icono apagado que tenía —era el control con menos
+     contraste del diálogo y en táctil nunca ganaba el hover.
+
+     El filete va punteado en reposo y se cierra en continuo al pasar por
+     encima, igual que el chip de años de `DateRange`. */
+  .detail-close {
+    align-items: center;
+    background: var(--surface);
+    border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: 10px;
+    color: var(--accent-strong);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 32px;
+    justify-content: center;
+    width: 32px;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.22s ease,
+      color 0.2s ease;
+  }
+
+  /* Tira de capturas: el swipe nativo es el gesto esperado en móvil, y cada
+     miniatura es un botón, así que el teclado llega por tabulación —que además
+     la desplaza a la vista— sin necesitar un `tabindex` en el contenedor. */
+  .shots {
+    /* Los pies de foto se alinean abajo aunque las capturas midan distinto: es
+       lo que mantiene legible una tira con formas mezcladas. */
+    align-items: stretch;
+    display: flex;
+    /* Sin encogerse: es un elemento flex del panel y, al ceder altura, recortaba
+       los pies de foto contra el `overflow`. */
+    flex: 0 0 auto;
+    gap: 1rem;
+    overflow-x: auto;
+    /* Que el swipe horizontal no dispare el «atrás» del navegador. */
+    overscroll-behavior-x: contain;
+    padding-block-end: 0.45rem;
+    scroll-snap-type: x mandatory;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    scrollbar-width: thin;
+  }
+
+  /* El arrastre con el ratón lo lleva `ProjectDialogRuntime.astro`; aquí sólo su acuse. La
+     mano abierta anuncia que la tira se puede coger, que es lo que faltaba: con
+     un ratón corriente no había ninguna pista de que hubiera más capturas. */
+  @media (hover: hover) {
+    .shots {
+      cursor: grab;
+    }
+  }
+
+  /**
+   * Y las miniaturas no se arrastran solas.
+   *
+   * Sin esto, apretar sobre una captura y mover el ratón arranca el arrastre
+   * nativo de la imagen: el navegador se queda el gesto, deja de mandar
+   * `pointermove` y cancela el puntero, así que el arrastre de la tira moría en
+   * el primer píxel. El atributo `draggable="false"` del marcado cubre a
+   * Firefox; `-webkit-user-drag` a Chromium y WebKit, que lo ignoran.
+   */
+  .shots img {
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+
+  .shots[data-dragging] {
+    cursor: grabbing;
+    /* El ajuste por posiciones devuelve la tira a la captura más cercana en cada
+       fotograma, y contra eso el arrastre no avanza. */
+    scroll-snap-type: none;
+    user-select: none;
+  }
+
+  .shots::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .shots::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 999px;
+  }
+
+  .shots::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 999px;
+  }
+
+  .shots > li {
+    flex: 0 0 auto;
+    scroll-snap-align: center;
+  }
+
+  .shots figure {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    justify-content: flex-start;
+  }
+
+  /* El ancho de la columna lo pone la captura, nunca su pie.
+     `inline-size: 0` saca al pie del cálculo del contenido —si no, una frase
+     larga ensanchaba el `<li>` y el marco, que se estira, quedaba más ancho que
+     la imagen y enseñaba fondo a la derecha— y `min-inline-size: 100%` lo hace
+     ocupar después el ancho ya resuelto, así que envuelve dentro del marco. */
+  .shots figcaption {
+    inline-size: 0;
+    min-inline-size: 100%;
+  }
+
+  .shot-trigger {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    display: block;
+    padding: 0;
+  }
+
+  .shot-trigger:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+    border-radius: 1.15rem;
+  }
+
+  /* Marco: solo borde y radio, sin muesca ni bisel falso. El alto lo fija la
+     imagen y el ancho lo deduce de su proporción, así ninguna captura sale
+     recortada y no hay que codificar aquí dimensiones de dispositivo. */
+  .frame {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1.15rem;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .frame[data-shape="popup"] {
+    border-radius: 0.8rem;
+  }
+
+  .frame[data-shape="browser"] {
+    border-radius: 0.6rem;
+  }
+
+  /* En la tira manda el alto en lo vertical y el ancho en lo apaisado: así una
+     captura de navegador no se estira a 38rem por igualar el alto de un móvil. */
+  .shots .frame :global(img) {
+    object-fit: contain;
+  }
+
+  /* Alturas recortadas respecto a las originales (52dvh/44dvh): la tira era lo
+     que desbordaba el panel —no el texto—, y con seis capturas de móvil se comía
+     más de la mitad de los 90dvh. La tira ya tiene su propio scroll horizontal,
+     así que no se pierde ninguna captura. */
+  .shots .frame[data-shape="phone"] :global(img) {
+    block-size: min(38dvh, 17rem);
+    inline-size: auto;
+    max-inline-size: 68vw;
+  }
+
+  .shots .frame[data-shape="popup"] :global(img) {
+    block-size: min(32dvh, 14rem);
+    inline-size: auto;
+    max-inline-size: 68vw;
+  }
+
+  .shots .frame[data-shape="browser"] :global(img) {
+    block-size: auto;
+    inline-size: min(74vw, 24rem);
+  }
+
+  .shots figcaption {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    line-height: 1.45;
+    /* El pie debe envolver, no participar en el ancho intrínseco del `figure`:
+       con `inline-size: 100%` una frase larga ensanchaba también la captura. */
+    max-inline-size: 22ch;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+  }
+
+  /* El párrafo técnico del diálogo. La tarjeta enseña `description`, una frase
+     corta; esto es `overview`, y por eso ya no se lee dos veces seguidas. */
+  .detail-description {
+    color: var(--text-subtle);
+    font-size: 0.95rem;
+    line-height: 1.65;
+  }
+
+  .highlights {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    list-style: none;
+    padding-left: 0;
+  }
+
+  /**
+   * El caso de estudio, sólo en la página.
+   *
+   * Hereda el ritmo vertical del resto de la ficha y se separa de los logros
+   * con una línea, que es lo que marca el cambio de registro: arriba el
+   * resumen de la tarjeta, debajo la lectura larga. Los `h2` cuelgan del
+   * `h1` del título, así que la jerarquía sale sola.
+   */
+  /* En el diálogo, debajo de las tecnologías y los enlaces: es la salida a la
+     lectura larga, no uno más de los enlaces externos del proyecto. */
+  .full-case {
+    align-items: center;
+    color: var(--accent);
+    display: inline-flex;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    gap: 0.4rem;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .full-case:hover,
+  .full-case:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+  }
+
+  .full-case-arrow {
+    display: inline-flex;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .full-case-arrow {
+      transition: translate 200ms ease;
+    }
+
+    .full-case:hover .full-case-arrow,
+    .full-case:focus-visible .full-case-arrow {
+      translate: 0.2rem 0;
+    }
+  }
+
+  .case {
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1.5rem, 3vw, 2.25rem);
+    margin-top: clamp(1.25rem, 2.5vw, 1.75rem);
+    padding-top: clamp(1.25rem, 2.5vw, 1.75rem);
+  }
+
+  .case-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .case-block h2 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  .case-block p {
+    color: var(--text-subtle);
+    font-size: 0.95rem;
+    line-height: 1.65;
+    margin: 0;
+    /* El texto largo se lee mal a todo lo ancho de la ficha. */
+    max-width: 68ch;
+  }
+
+  /* Numeradas y no con puntos: una decisión viene de la anterior, y el número
+     deja referirse a ella. El contador va a mano porque el marcador nativo no
+     se puede alinear con el `h3` sin sacarlo del flujo. */
+  .case-decisions {
+    counter-reset: decision;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    list-style: none;
+    margin: 0;
+    padding-left: 0;
+  }
+
+  .case-decisions li {
+    counter-increment: decision;
+    display: grid;
+    column-gap: 0.75rem;
+    grid-template-columns: 1.5rem 1fr;
+  }
+
+  .case-decisions li::before {
+    color: var(--text-muted);
+    content: counter(decision, decimal-leading-zero);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.9;
+  }
+
+  .case-decisions h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    grid-column: 2;
+    margin: 0 0 0.35rem;
+  }
+
+  .case-decisions p {
+    grid-column: 2;
+  }
+
+  .case-outcome {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0;
+    max-width: 68ch;
+    padding-left: 0;
+  }
+
+  /* Mismo marcador que `.highlights`, que es lo que son: resultados en lista. */
+  .case-outcome li {
+    align-items: start;
+    color: var(--text-subtle);
+    column-gap: 0.55rem;
+    display: grid;
+    font-size: 0.95rem;
+    grid-template-columns: 16px 1fr;
+    line-height: 1.65;
+  }
+
+  /* Mismo marcador que `.highlights li::before`: la receta entera, no una
+     aproximada, que si no las dos listas de la misma página no casan. */
+  .case-outcome li::before {
+    --dot-ink: var(--accent);
+    background-image: var(--dot-fine);
+    background-size: var(--dot-fine-size);
+    content: "";
+    height: 3px;
+    margin-top: 0.58em;
+  }
+
+  @media (width <= 700px) {
+    .case-decisions li {
+      grid-template-columns: 1.1rem 1fr;
+    }
+  }
+
+  /* Cuatro puntos en vez de un disco: es el marcador de sección a media escala,
+     con su misma receta —paso de 4 px, radio de 1,1— sobre los 16 px que mide
+     esta primera columna. Se dibuja y no se escribe —nada de `content: "--"`—
+     porque el texto generado lo verbalizan algunos lectores de pantalla y esto
+     es decoración. */
+  .highlights li {
+    align-items: start;
+    color: var(--text-muted);
+    column-gap: 0.55rem;
+    display: grid;
+    font-size: 0.875rem;
+    grid-template-columns: 16px 1fr;
+    line-height: 1.55;
+  }
+
+  .highlights li::before {
+    --dot-ink: var(--accent);
+    background-image: var(--dot-fine);
+    background-size: var(--dot-fine-size);
+    content: "";
+    height: 3px;
+    /* Media línea: alinea la fila de puntos con la primera fila de texto. */
+    margin-top: 0.58em;
+  }
+
+  .detail footer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    margin-top: auto;
+  }
+
+  .technologies {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  /* Encendido permanente con el color de la tecnología, con la misma receta que
+     Habilidades usa en hover: tinte del 10 %, borde al 45 % e icono a color
+     pleno. El nombre se queda en `--text` a propósito —teñirlo a 0,72 rem lo
+     dejaría por debajo de AA en la mitad de las marcas— y el color lo llevan el
+     icono, el borde y el fondo. */
+  .technologies li {
+    align-items: center;
+    background: color-mix(in srgb, var(--tech) 10%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--tech) 45%, transparent);
+    border-radius: 6px;
+    color: var(--text);
+    display: inline-flex;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    gap: 0.35rem;
+    line-height: 1.35;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .technology-icon {
+    color: var(--tech);
+    display: inline-flex;
+  }
+
+  .technology-icon :global(svg) {
+    flex: 0 0 auto;
+    height: 0.85rem;
+    width: 0.85rem;
+  }
+
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  nav a {
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 0.65rem;
+    color: var(--text);
+    display: inline-flex;
+    font-size: 0.8rem;
+    font-weight: 600;
+    gap: 0.4rem;
+    min-height: 44px;
+    padding: 0.6rem 0.75rem;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.22s ease,
+      color 0.2s ease;
+  }
+
+  .link-icon {
+    display: inline-flex;
+  }
+
+  .link-icon :global(svg) {
+    flex: 0 0 auto;
+    height: 0.9rem;
+    width: 0.9rem;
+  }
+
+  /* --- Visor --------------------------------------------------------------
+
+     Nunca fijar `display` en el propio <dialog>: rompería el `display: none`
+     que le da el estar cerrado. La caja la pone `.lightbox-panel`. */
+  .lightbox {
+    background: transparent;
+    border: 0;
+    color: var(--text);
+    max-height: none;
+    max-width: none;
+    padding: 0;
+  }
+
+  /* Más opaco que el del detalle: hay otro diálogo debajo y conviene que se
+     lea como una capa por encima, no como el mismo plano. */
+  .lightbox::backdrop {
+    background: var(--modal-veil-strong);
+  }
+
+  .lightbox-panel {
+    block-size: 100dvh;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    inline-size: 100vw;
+    padding: 0.75rem;
+  }
+
+  .lightbox-bar {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+  }
+
+  .lightbox-title {
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .lightbox-counter {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    margin-inline-start: auto;
+  }
+
+  .lightbox-close {
+    align-items: center;
+    background: var(--surface-raised);
+    border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: 10px;
+    color: var(--accent-strong);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 32px;
+    justify-content: center;
+    width: 32px;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.22s ease,
+      color 0.2s ease;
+  }
+
+  .lightbox-figure {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    justify-content: center;
+    min-block-size: 0;
+    block-size: 100%;
+    margin: 0;
+  }
+
+  /* Aquí manda la ventana y la imagen se ajusta dentro, sea cual sea su forma:
+     por eso el visor no necesita reglas por `data-shape`.
+
+     El tope va en `dvh` y no en `100%`: un porcentaje contra una altura de
+     contenido es indefinido y el navegador lo ignora, que es justo lo que
+     cortaba las capturas por abajo. Los 13rem son lo que ocupan la barra, la
+     fila de navegación, el pie y los huecos. */
+  .lightbox-figure .frame {
+    max-inline-size: 100%;
+  }
+
+  .lightbox-figure .frame :global(img) {
+    block-size: auto;
+    inline-size: auto;
+    max-block-size: calc(100dvh - 13rem);
+    max-inline-size: 92vw;
+    object-fit: contain;
+  }
+
+  /**
+   * Aquí vivía un parche, y se ha ido.
+   *
+   * Una captura de escritorio metida en 92vw de un móvil se queda en 224 px de
+   * alto: se ve la forma, no se lee nada. La respuesta de entonces fue servirla a
+   * `min(1280px, 200vw)` y dejar que el marco se desplazara en horizontal — o
+   * sea, abrir una captura te dejaba viendo la mitad izquierda de algo y
+   * teniendo que arrastrar de lado para enterarte de que había más.
+   *
+   * La respuesta de verdad —pellizco y doble toque, `applyZoom` en
+   * `ProjectDialogRuntime.astro`— se escribió después, pero este bloque nunca se quitó y los
+   * dos convivían: el marco se desplazaba **y** además hacía zoom. Ahora la
+   * captura entra entera en la pantalla, que es lo que se espera al abrirla, y
+   * quien quiera leer la letra pequeña amplía.
+   */
+
+  .slide-caption {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    max-inline-size: 46ch;
+    text-align: center;
+    text-wrap: pretty;
+  }
+
+  .lightbox-nav {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+  }
+
+  /* Flotan sobre el `::backdrop`, no sobre `--surface`: el fondo sólido es lo
+     que mantiene el contraste de los tokens. */
+  .nav-button {
+    align-items: center;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 0.65rem;
+    color: var(--text);
+    cursor: pointer;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.22s ease,
+      color 0.2s ease;
+  }
+
+  /**
+   * `aria-disabled` y no `disabled`.
+   *
+   * `disabled` saca el botón del orden de tabulación **y** del árbol de
+   * accesibilidad: al llegar al primer fotograma, la flecha de «anterior»
+   * desaparecía bajo los dedos de quien navega con teclado, y con ella la pista
+   * de que estaba en el extremo. Con `aria-disabled` el botón sigue siendo
+   * alcanzable y anunciable como no disponible; quien ignora la acción es el
+   * guion, que ya comprobaba los límites en `step()`.
+   */
+  .nav-button[aria-disabled="true"] {
+    color: var(--text-muted);
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  .nav-button[data-lightbox-prev] :global(svg) {
+    transform: scaleX(-1);
+  }
+
+  .sr-only {
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  @media (hover: hover) {
+    /* Cerrar se rellena de acento con el icono en blanco: es la acción que hay
+       que encontrar sin buscarla. El punteado del reposo se cierra aquí en
+       línea continua; `border-style` queda fuera de la `transition` porque el
+       trazo no interpola y animarlo sería un parpadeo. */
+    .detail-close:hover,
+    .lightbox-close:hover {
+      background: var(--action-fill);
+      border-color: var(--action-fill);
+      border-style: solid;
+      box-shadow: var(--glow-hover);
+      color: var(--action-fill-text);
+    }
+
+    .nav-button:not([aria-disabled="true"]):hover {
+      background: var(--surface-hover);
+      border-color: var(--border-hover);
+      box-shadow: var(--glow-hover);
+      color: var(--text);
+    }
+
+    nav a:hover {
+      background: var(--accent-soft);
+      border-color: var(--border-hover);
+      box-shadow: var(--glow-hover);
+      color: var(--accent);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /**
+     * El fondo entra con el panel: la transición sólo cubría `.detail`, así que
+     * el oscurecido aparecía de golpe mientras el panel se desvanecía.
+     *
+     * ## Compatibilidad (medido en 2026-08)
+     *
+     * `transition: overlay … allow-discrete` lo entienden Chromium y WebKit
+     * reciente; Firefox todavía no. Allí la **entrada** sí se anima y la salida
+     * no: el diálogo desaparece de golpe. Es degradación aceptable —se pierde
+     * el gesto, no el contenido— y la alternativa sería retrasar `close()`
+     * desde el guion, o sea meter una máquina de estados en algo que el
+     * navegador ya resuelve. No compensa.
+     */
+    .detail::backdrop {
+      opacity: 1;
+      transition:
+        opacity 150ms ease,
+        overlay 150ms allow-discrete,
+        display 150ms allow-discrete;
+    }
+
+    /**
+     * El panel entra con cuerpo, no sólo con opacidad.
+     *
+     * Sale de una tarjeta que ya aparece con muelle, y un desvanecido plano lo
+     * dejaba como la única pieza del sitio que llega sin desplazarse. El
+     * desplazamiento va en el `<dialog>` y no en `.detail-panel` porque es el
+     * diálogo el que lleva el encuadre de escuadras: moviendo el panel a solas,
+     * marco y contenido se separarían durante los 150 ms.
+     *
+     * En CSS: es una curva de entrada, no un muelle, y la apertura de un
+     * diálogo es un cambio de estado de un solo elemento.
+     */
+    /* `dialog.detail` y no `.detail` a secas: la ficha de `/proyectos/<id>/`
+       comparte clase y es un `<article>`, que nunca lleva `[open]`. Con el
+       selector suelto, `.detail:not([open])` la cazaba y la servía entera a
+       `opacity: 0` —contenido presente, medido y transparente—. Playwright no
+       lo veía porque `toBeVisible()` no mira la opacidad, y axe tampoco. */
+    dialog.detail {
+      opacity: 1;
+      scale: 1;
+      transition:
+        opacity 150ms ease,
+        scale 150ms cubic-bezier(0.2, 0, 0, 1),
+        translate 150ms cubic-bezier(0.2, 0, 0, 1),
+        overlay 150ms allow-discrete,
+        display 150ms allow-discrete;
+      translate: 0 0;
+    }
+
+    dialog.detail:not([open]),
+    dialog.detail:not([open])::backdrop {
+      opacity: 0;
+    }
+
+    dialog.detail:not([open]) {
+      scale: 0.985;
+      translate: 0 4px;
+    }
+
+    @starting-style {
+      dialog.detail[open],
+      dialog.detail[open]::backdrop {
+        opacity: 0;
+      }
+
+      dialog.detail[open] {
+        /* Las escuadras se cierran alrededor del panel según entra, como el
+           visor del retrato del hero. `mask-size` sí es animable, y cambiarlo
+           por `--arm` es lo que ya hace la tarjeta de proyecto. */
+        --arm: 0px;
+        scale: 0.985;
+        translate: 0 4px;
+      }
+    }
+
+    /* El velo del visor se anima igual que el del detalle. Antes sólo se
+       desvanecía el panel y el oscurecido entraba y salía de golpe, lo que se
+       notaba justo donde más —hay otro diálogo debajo, y el corte seco dejaba
+       ver el detalle a plena luz durante un fotograma—. */
+    .lightbox,
+    .lightbox::backdrop {
+      opacity: 1;
+      transition:
+        opacity 120ms ease,
+        overlay 120ms allow-discrete,
+        display 120ms allow-discrete;
+    }
+
+    .lightbox:not([open]),
+    .lightbox:not([open])::backdrop {
+      opacity: 0;
+    }
+
+    @starting-style {
+      .lightbox[open],
+      .lightbox[open]::backdrop {
+        opacity: 0;
+      }
+    }
+  }
+
+  /* Dos columnas en escritorio: las tecnologías y los enlaces se van al lado del
+     texto en vez de debajo, que es lo que empujaba el panel más allá de los
+     90dvh. Se coloca sobre los hijos que ya existen —sin envoltorios nuevos—
+     porque el presupuesto de DOM del build va contado. */
+  @media (width >= 900px) {
+    .detail-panel {
+      align-content: start;
+      column-gap: 1.1rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 14rem;
+    }
+
+    /* La descripción también cruza las dos columnas: es el texto principal y
+       cortarlo a dos tercios dejaba un vacío a su derecha mientras los chips
+       empezaban más abajo. El reparto en dos empieza en la lista. */
+    .detail header,
+    .shots,
+    .detail-description {
+      grid-column: 1 / -1;
+    }
+
+    .highlights {
+      grid-column: 1;
+    }
+
+    .technologies,
+    .detail nav {
+      grid-column: 2;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .detail-close,
+    .lightbox-close,
+    .nav-button,
+    nav a {
+      transition: none;
+    }
+
+    .shots {
+      scroll-behavior: auto;
+    }
+  }
+
+  /* El resto del apagado de cristal está en Layout, con los tokens; el fondo del
+     diálogo tiene que ir aquí porque su regla lleva el ámbito de este componente
+     y ganaría a cualquier selector global equivalente. */
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    .detail::backdrop,
+    .lightbox::backdrop {
+      backdrop-filter: none;
+      background: var(--modal-veil-opaque);
+    }
+  }
+
+  /* Sin el aro de acento cuando el sistema pide más contraste: la separación la
+     tiene que dar el borde, no un halo de color. Ahora es `none` y no
+     `var(--shadow)` porque el token ya no proyecta nada —ver el bloque de
+     sombras en `Layout.astro`— y dejarlo escrito así insinuaba que sí. */
+  @media (prefers-contrast: more) {
+    .detail-panel {
+      box-shadow: none;
+    }
+  }
+
+  @media print {
+    .detail,
+    .lightbox {
+      display: none !important;
+    }
+
+    /* La insignia sobrevive al papel —es el único color de la lista de
+       proyectos— pero encogida a la altura de una fila de texto. */
+    .status {
+      font-size: 0.58rem;
+      gap: 4px;
+      min-height: auto;
+      padding: 0;
+    }
+
+    /* En papel el medidor no puede segmentarse: `@media print` anula
+       `mask-image` en todo el documento para que nada dependa de una máscara
+       que el PDF no compone igual. Lo que queda es la misma barra de dos
+       tramos, más corta. */
+    .status::before {
+      block-size: 5px;
+      inline-size: 12px;
+    }
+  }
+</style>
+
+{
+  /* La insignia de estado ya no vive aquí: está en `src/styles/projectStatus.css`,
+     que importa `Layout.astro`. Vivía en este archivo para viajar siempre con la
+     tarjeta, y eso obligaba a la portada a cargar la hoja entera del diálogo
+     (PERF-06). */
+}
+<style is:global>
+  /**
+   * La fila de controles de la cabecera: anterior, siguiente y cerrar.
+   *
+   * Global y no con ámbito porque los dos primeros los construye el guion de
+   * `ProjectDialogRuntime.astro` —catorce nodos que no tienen por qué viajar en el HTML—, y
+   * el CSS con ámbito de Astro no alcanza a lo que no ha emitido el servidor. El
+   * botón de cerrar sí es del servidor y conserva sus estilos propios: aquí sólo
+   * se agrupa.
+   */
+  .detail-actions {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 0.35rem;
+  }
+
+  .detail-step {
+    align-items: center;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex;
+    /* La flecha es un glifo, no un icono: la voz mono del resto del aparato. */
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    height: 32px;
+    justify-content: center;
+    line-height: 1;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.22s ease,
+      color 0.2s ease;
+    width: 32px;
+  }
+
+  @media (hover: hover) {
+    .detail-step:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-hover);
+      box-shadow: var(--glow-hover);
+      color: var(--text);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .detail-step {
+      transition: none;
+    }
+  }
+
+  /**
+   * El rail de miniaturas del visor, y el estado ampliado.
+   *
+   * Global por lo mismo que los controles de la cabecera: los construye el
+   * guion de `ProjectDialogRuntime.astro` y el CSS con ámbito no alcanza a lo que no ha
+   * emitido el servidor.
+   */
+  .lightbox-rail {
+    display: flex;
+    flex: 1;
+    gap: 0.4rem;
+    justify-content: center;
+    /* Con muchas capturas la tira se desplaza en vez de encoger las
+       miniaturas hasta dejarlas ilegibles. */
+    overflow-x: auto;
+    padding-inline: 0.25rem;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .lightbox-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .lightbox-thumb {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    display: block;
+    flex: 0 0 auto;
+    /**
+     * Caja fija, y el recorte lo hace `object-fit: cover`.
+     *
+     * El primer intento dejó el ancho en `auto` «para no deformar las capturas,
+     * que mezclan móvil y escritorio». Estaba mal por dos motivos: `cover`
+     * recorta, no deforma —así que no había nada que evitar— y sin un ancho
+     * contra el que recortar cada miniatura tomaba el suyo natural. Medido en
+     * un móvil de 375 px: **770 px por miniatura** y un rail de 2 065 px dentro
+     * de un hueco de 247. Las capturas anchas se salían de la pantalla y no
+     * había forma de llegar a ellas.
+     */
+    block-size: 44px;
+    inline-size: 64px;
+    overflow: hidden;
+    padding: 0;
+    scroll-snap-align: center;
+    transition:
+      border-color 0.2s ease,
+      opacity 0.2s ease;
+    opacity: 0.55;
+  }
+
+  .lightbox-thumb img {
+    block-size: 100%;
+    display: block;
+    inline-size: 100%;
+    object-fit: cover;
+  }
+
+  .lightbox-thumb[aria-current="true"] {
+    border-color: var(--accent);
+    opacity: 1;
+  }
+
+  @media (hover: hover) {
+    .lightbox-thumb:hover {
+      border-color: var(--border-hover);
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lightbox-thumb {
+      transition: none;
+    }
+  }
+
+  /* Ampliada, la imagen se sale de su caja a propósito: sin esto el recorte del
+     marco la devolvería al tamaño de siempre y el zoom no se vería. */
+  .lightbox[data-zoomed] [data-lightbox-frame] {
+    overflow: visible;
+    touch-action: none;
+  }
+</style>

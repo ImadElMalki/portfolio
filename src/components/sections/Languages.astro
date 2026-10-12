@@ -1,0 +1,128 @@
+---
+import Section from "@/components/Section.astro"
+import type { CvData, Locale } from "@/cv"
+import { localized } from "@/lib/i18n"
+import { sectionId, sectionTitle } from "@/lib/sections"
+
+interface Props {
+  locale: Locale
+  cv: Readonly<CvData>
+}
+
+const { locale, cv } = Astro.props
+const { languages } = cv
+
+/**
+ * Cinco idiomas en dos renglones, agrupados por nivel.
+ *
+ * Eran cinco filas con filete, cada una con su anillo de seis sextos y su
+ * fluidez escrita. Cuatro de las cinco decían exactamente lo mismo —nativo— y
+ * el anillo dibujaba cuatro veces el mismo círculo lleno: una sección de cinco
+ * filas para dos datos. Agrupada, la parte que se busca —el B2 de inglés— deja
+ * de estar enterrada entre cuatro repeticiones.
+ *
+ * El rótulo es el nivel y el dato son los idiomas, no al revés: quien lee un
+ * currículum busca «hasta dónde», y los nombres son la respuesta. El código del
+ * marco va tal cual para los que no son nativos, que es lo que un ATS reconoce
+ * —y lo que el mismo código hacía antes en el `<b class="cefr">`—.
+ *
+ */
+const natives = languages.filter(({ level }) => level === "native")
+const rest = languages.filter(({ level }) => level !== "native")
+
+const rows = [
+  ...(natives[0]
+    ? [
+        {
+          label: localized(natives[0].fluency, locale),
+          value: natives
+            .map(({ language }) => localized(language, locale))
+            .join(" · "),
+        },
+      ]
+    : []),
+  ...rest.map(({ language, level }) => ({
+    label: level,
+    value: localized(language, locale),
+  })),
+]
+---
+
+<Section
+  id={sectionId("languages")}
+  title={sectionTitle("languages", locale)}
+  density="compact"
+>
+  {
+    /* `dl` y no `ul`: son parejas de nivel y valor, que es literalmente lo que
+       describe una lista de definiciones. Cada pareja va envuelta porque un
+       `dt`/`dd` suelto en una rejilla de dos columnas no se puede agrupar. */
+  }
+  <dl class="language-list">
+    {
+      rows.map(({ label, value }) => (
+        <div class="language-row">
+          <dt class="label-mono">{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))
+    }
+  </dl>
+</Section>
+
+<style>
+  .language-list {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0;
+  }
+
+  /**
+   * Sin filete entre renglones.
+   *
+   * La línea se ganaba el sitio cuando eran cinco filas estructuralmente
+   * idénticas y había que poder recorrerlas con la vista. Con dos, un filete es
+   * una raya que separa dos cosas que ya se distinguen solas.
+   */
+  .language-row {
+    align-items: baseline;
+    display: grid;
+    gap: 0.2rem 1rem;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+  }
+
+  /* Tipografía, cuerpo, color y tracking salen de `.label-mono` (Layout). El
+     nivel es un valor —«B2», «Nativo»—, así que no se aparta más. */
+  dt {
+    margin: 0;
+  }
+
+  dd {
+    color: var(--text);
+    font-size: 0.925rem;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  @media (width <= 480px) {
+    /* A 320 px la columna del rótulo dejaba los cuatro nativos en tres líneas
+       de nueve caracteres. Apilados, el nombre manda el renglón entero. */
+    .language-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media print {
+    /* Una columna en papel, como el resto del documento: un extractor de los que
+       usan los portales de empleo lee el texto en el orden del documento, y una
+       rejilla de tres columnas es exactamente donde ese orden y el visual dejan
+       de coincidir. */
+    .language-list {
+      gap: 0.15rem;
+    }
+
+    .language-row {
+      grid-template-columns: 5.5rem minmax(0, 1fr);
+    }
+  }
+</style>

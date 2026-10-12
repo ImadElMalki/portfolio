@@ -1,0 +1,192 @@
+---
+/**
+ * Chip de años de una entrada de experiencia o de estudios.
+ *
+ * Vivía copiado en `Experience.astro` y `Education.astro` con un comentario que
+ * admitía que "cambian juntos". Además de la deriva, el CSS va incrustado en las
+ * tres páginas del sitio, así que el bloque duplicado se pagaba seis veces.
+ */
+import type { Locale } from "@/cv"
+import { currentLabel, formatMonthYear, formatYearMonth } from "@/lib/cvFormat"
+
+interface Props {
+  locale: Locale
+  startDate: string
+  /** `null` es «hasta hoy»: se rotula en vez de dejar la fecha abierta. */
+  endDate: string | null
+}
+
+const { locale, startDate, endDate } = Astro.props
+
+/**
+ * El chip se lee como una escala: `2023.05 ···· 2025.02`.
+ *
+ * Antes eran dos años sueltos separados por una raya. El año solo escondía el
+ * mes —que sí está en `cv.json` y sí importa en una experiencia de once meses—
+ * y la raya era un guion de texto, que cambia de largo con la fuente. Ahora la
+ * marca es completa y lo que separa es un recorrido dibujado, no un carácter.
+ *
+ * El mes en letra no se pierde: sigue en el `title` y en el texto para lector
+ * de pantalla, que es donde una fecha se lee como fecha y no como escala.
+ */
+const startStamp = formatYearMonth(startDate)
+const endStamp = endDate != null ? formatYearMonth(endDate) : null
+const startLabel = formatMonthYear(startDate, locale)
+const endLabel =
+  endDate != null ? formatMonthYear(endDate, locale) : currentLabel(locale)
+---
+
+<span class="date-range">
+  <time datetime={startDate} title={startLabel}>
+    {startStamp}
+    <span class="sr-only">, {startLabel}</span>
+  </time>
+  {
+    /* El recorrido. `aria-hidden` porque el «de … a …» ya lo dicen las dos
+      marcas de al lado con su texto completo. */
+  }
+  <span class="date-track" aria-hidden="true"></span>
+  {
+    endStamp != null ? (
+      <time datetime={endDate} title={endLabel}>
+        {endStamp}
+        <span class="sr-only">, {endLabel}</span>
+      </time>
+    ) : (
+      <span class="date-current">{endLabel}</span>
+    )
+  }
+</span>
+
+<style>
+  /* El radio es el de los chips de tecnología, para que todo lo que sea una
+     etiqueta se lea igual. `.sr-only` es global, en Layout.
+
+     El filete va punteado en reposo, como los botones de cerrar de los
+     diálogos: el chip es un dato anotado al margen, no una caja cerrada. Al
+     pasar por encima se cierra en línea continua. */
+  .date-range {
+    align-items: center;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--text-subtle);
+    display: inline-flex;
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    /* Tabular: las dos marcas tienen que ocupar lo mismo aunque cambien los
+       dígitos, o el recorrido de en medio baila de fila en fila. */
+    font-variant-numeric: tabular-nums;
+    gap: 0.4rem;
+    line-height: 1;
+    min-height: 2rem;
+    padding: 0.45rem 0.7rem;
+    transition:
+      background-color 220ms ease,
+      border-color 220ms ease,
+      color 220ms ease,
+      box-shadow 220ms ease;
+    white-space: nowrap;
+  }
+
+  /**
+   * El recorrido entre las dos marcas: matriz de puntos, no un guion.
+   *
+   * Un carácter cambia de ancho con la fuente y se rompe al cargarla tarde;
+   * esto es un gradiente de 4 px de paso, el mismo de la barra de sección, del
+   * retrato y del cierre de contacto. 24 px son seis puntos, que es el largo
+   * mínimo para que se lea como recorrido y no como un punto suelto.
+   */
+  .date-track {
+    background-image: var(--dot-fine);
+    background-size: var(--dot-fine-size);
+    block-size: 3px;
+    flex: 0 0 24px;
+    opacity: 0.75;
+  }
+
+  /**
+   * Las dos marcas van en matriz de puntos; el resto del chip, no.
+   *
+   * `2023.05` es una lectura de instrumento, y Doto es la fuente que el sitio
+   * reserva para eso. Se acota a `time` a propósito: «Actualidad» es una palabra
+   * y en puntos se leería peor, y el `.sr-only` de dentro no se pinta.
+   *
+   * `font-size` sube de los 0,75 rem del chip: los puntos dejan aire dentro de
+   * la caja de la letra, así que al mismo cuerpo Doto se ve más pequeña que la
+   * mono de al lado.
+   */
+  .date-range time {
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+  }
+
+  /* «Actualidad» no es una marca de tiempo, así que no va en la escala de las
+     otras dos: versalitas para que se lea como rótulo. */
+  .date-current {
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* Iluminación al pasar por encima: el chip no se mueve ni cambia de tamaño
+     —está en la misma fila que un título— así que el efecto es solo de luz.
+     `--glow-hover` es la receta compartida con el resto de los controles.
+
+     `border-style` queda fuera de la `transition` a propósito: el trazo no
+     interpola, así que animarlo sería un parpadeo. Sólo el color va con curva. */
+  @media (hover: hover) {
+    .date-range:hover {
+      background: var(--accent-soft);
+      border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+      border-style: solid;
+      box-shadow: var(--glow-hover);
+      color: var(--accent-strong);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .date-range {
+      transition: none;
+    }
+  }
+
+  /* En columna el chip baja debajo del título, en las dos secciones. */
+  @media (width <= 700px) {
+    .date-range {
+      order: 2;
+    }
+  }
+
+  /* El chip se imprime: es el mismo hito visual que en la web y ahora el PDF
+     sí pinta fondos. Sólo pierde la altura táctil, que en papel no significa
+     nada. */
+  @media print {
+    .date-range {
+      font-size: 0.66rem;
+      gap: 0.3rem;
+      min-height: auto;
+      padding: 0.15rem 0.4rem;
+    }
+
+    /* Más corto en papel: la fila del empleo comparte ancho con el nombre de la
+       empresa y en A4 no sobra sitio. */
+    .date-track {
+      flex-basis: 16px;
+    }
+
+    /**
+     * Y las marcas vuelven a la mono.
+     *
+     * Es la misma regla que el nombre del hero y por el mismo motivo: Chromium
+     * no sabe incrustar una fuente de puntos sin convertirla en trazado, y una
+     * fecha en matriz deja de ser texto seleccionable para el ATS que lee el CV.
+     * `scripts/check-cv-pdf.mjs` exige que las únicas fuentes del PDF sean Inter
+     * y JetBrains Mono.
+     */
+    .date-range time {
+      font-family: var(--font-mono);
+      font-size: inherit;
+    }
+  }
+</style>

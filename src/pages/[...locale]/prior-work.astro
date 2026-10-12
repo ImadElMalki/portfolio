@@ -1,0 +1,39 @@
+---
+import PriorWork from "@/components/sections/PriorWork.astro"
+import { getCv, type Locale } from "@/cv"
+import Layout from "@/layouts/Layout.astro"
+import { localeStaticPaths } from "@/lib/i18n"
+import { t } from "@/lib/i18n"
+
+export const getStaticPaths = localeStaticPaths
+
+interface Props {
+  locale: Locale
+}
+
+const { locale } = Astro.props
+const cv = await getCv()
+const title = t(locale, "priorWork")
+---
+
+{
+  /**
+   * Las doce filas de «Antes de programar», en su propia dirección.
+   *
+   * Mismo papel que `/project-details/`: contenido que la portada enlaza pero
+   * no incrusta. Hasta el 07-10-2026 esas filas viajaban en el HTML de cada
+   * visita, escondidas tras `display: none`; ahora se descargan al abrir el
+   * pliegue y la portada no las lleva.
+   *
+   * `noindex` por lo mismo que la otra: es una pieza de otra página, no una
+   * página que alguien deba encontrar en un buscador. Los empleos siguen
+   * estando en `/cv.json`, en `/cv.md` y en el PDF, que es donde un
+   * currículum los tiene que decir.
+   */
+}
+<Layout cv={cv} title={title} description={title} locale={locale} noindex>
+  <main id="main">
+    <h1>{title}</h1>
+    <PriorWork locale={locale} items={cv.otherWork} />
+  </main>
+</Layout>

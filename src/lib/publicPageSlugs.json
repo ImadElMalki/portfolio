@@ -1,0 +1,6 @@
+{
+  "about": { "es": "sobre-mi", "ca": "sobre-mi", "en": "about" },
+  "services": { "es": "servicios", "ca": "serveis", "en": "services" },
+  "privacy": { "es": "privacidad", "ca": "privacitat", "en": "privacy" },
+  "projects": { "es": "proyectos", "ca": "projectes", "en": "projects" }
+}

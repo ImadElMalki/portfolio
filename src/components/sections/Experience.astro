@@ -1,0 +1,611 @@
+---
+import { Image } from "astro:assets"
+
+import Section from "../Section.astro"
+import DateRange from "../DateRange.astro"
+
+import type { CvData, Locale } from "@/cv"
+import { companyLogo } from "@/lib/companyLogos"
+import { yearRange } from "@/lib/cvFormat"
+import { localizedPath } from "@/lib/i18n"
+import PriorWork from "./PriorWork.astro"
+import { localized, t } from "@/lib/i18n"
+import { sectionId, sectionTitle } from "@/lib/sections"
+
+interface Props {
+  locale: Locale
+  cv: Readonly<CvData>
+}
+
+const { locale, cv } = Astro.props
+const { work, otherWork, otherSkills } = cv
+
+/* El rango del bloque entero, calculado y no escrito en el rótulo: así no se
+   queda desfasado cuando `cv.json` cambie. */
+const priorRange =
+  otherWork.length > 0
+    ? yearRange(
+        otherWork.reduce(
+          (min, job) => (job.startDate < min ? job.startDate : min),
+          otherWork[0]!.startDate,
+        ),
+        otherWork.reduce(
+          (max, job) => (job.endDate > max ? job.endDate : max),
+          otherWork[0]!.endDate,
+        ),
+      )
+    : ""
+---
+
+<Section
+  id={sectionId("experience")}
+  title={sectionTitle("experience", locale)}
+>
+  <ol class="experience-list">
+    {
+      work.map(
+        ({
+          name,
+          description,
+          startDate,
+          endDate,
+          position,
+          summary,
+          summaryPrint,
+          highlights,
+          highlightsPrint,
+          url,
+        }) => {
+          const logo = companyLogo(name)
+
+          return (
+            <li class="experience-item">
+              <article>
+                <header>
+                  <div class="role">
+                    <h3>
+                      <a
+                        href={url}
+                        title={`${t(locale, "viewProject")} ${name}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {/* `alt=""` y no el nombre de la empresa: va escrito
+                            justo al lado, y repetirlo obligaría a oírlo dos
+                            veces con lector de pantalla. Mismo criterio que la
+                            flecha de enlace externo de aquí debajo. */}
+                        {logo && (
+                          <Image
+                            class:list={["company-logo", logo.tone]}
+                            src={logo.image}
+                            alt=""
+                            aria-hidden="true"
+                            width={22}
+                            height={22}
+                            densities={[1, 2]}
+                            format="webp"
+                            quality={90}
+                          />
+                        )}
+                        {name}
+                        <svg
+                          class="external"
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          width="12"
+                          height="12"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M7 17 17 7" />
+                          <path d="M8 7h9v9" />
+                        </svg>
+                      </a>
+                      {description && (
+                        <span class="employer-note">
+                          {localized(description, locale)}
+                        </span>
+                      )}
+                    </h3>
+                    <h4>{localized(position, locale)}</h4>
+                  </div>
+
+                  <DateRange
+                    locale={locale}
+                    startDate={startDate}
+                    endDate={endDate}
+                  />
+                </header>
+
+                <footer>
+                  {/**
+                   * El mismo empleo, en dos voces.
+                   *
+                   * La de pantalla habla en primera persona —«Implemento
+                   * componentes, mantengo la aplicación»—, que es la voz de
+                   * quien enseña su trabajo. La de papel es nominal e
+                   * impersonal, que es la convención de un currículum y la
+                   * forma en la que están escritas las ofertas contra las que
+                   * un ATS lo compara.
+                   *
+                   * Las dos van en el marcado y el CSS enseña la que toca:
+                   * `.print`/`.no-print` son globales (`Layout.astro`) y el PDF
+                   * sale de este mismo DOM impreso con Chromium, así que no hay
+                   * un segundo documento que mantener.
+                   *
+                   * Sin `summaryPrint` en `cv.json` se imprime el de pantalla,
+                   * que es el respaldo correcto: es texto verdadero, sólo que
+                   * en otra voz.
+                   */}
+                  {summaryPrint ? (
+                    <>
+                      <p class="no-print">{localized(summary, locale)}</p>
+                      <p class="print">{localized(summaryPrint, locale)}</p>
+                    </>
+                  ) : (
+                    <p>{localized(summary, locale)}</p>
+                  )}
+                  {localized(highlights, locale).length > 0 && (
+                    <details class="job-details">
+                      <summary>
+                        <svg
+                          class="chevron"
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          width="12"
+                          height="12"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                        {t(locale, "jobDetails")}
+                      </summary>
+                      <ul
+                        class:list={[
+                          "highlights",
+                          { "no-print": highlightsPrint },
+                        ]}
+                      >
+                        {localized(highlights, locale).map((highlight) => (
+                          <li>{highlight}</li>
+                        ))}
+                      </ul>
+                      {highlightsPrint && (
+                        <ul class="highlights print">
+                          {localized(highlightsPrint, locale).map(
+                            (highlight) => (
+                              <li>{highlight}</li>
+                            ),
+                          )}
+                        </ul>
+                      )}
+                    </details>
+                  )}
+                </footer>
+              </article>
+            </li>
+          )
+        },
+      )
+    }
+  </ol>
+
+  {
+    /**
+     * Antes del código: almacén, cocina, atención al cliente.
+     *
+     * Fuera de la línea de tiempo y plegado, no como seis fichas más. Son
+     * empleos que ya no dicen qué sé hacer, sólo que llevo trabajando desde
+     * 2015: la fila de una línea —puesto, empresa, sector, años— es exactamente
+     * lo que aportan, y seis fichas completas empujarían a Proyectos media
+     * pantalla más abajo por un dato de contexto.
+     *
+     * Conserva la clase `job-details`, como el pliegue de las certificaciones:
+     * `printableDetails.ts` consulta ese selector exacto para abrirlo al
+     * imprimir donde no haya `::details-content`, y con una clase propia este
+     * bloque se quedaría fuera de esa red.
+     */
+    otherWork.length > 0 && (
+      <details
+        class="job-details prior-work"
+        data-prior-work
+        data-prior-work-url={localizedPath(locale, "/prior-work/")}
+      >
+        <summary>
+          <svg
+            class="chevron"
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            width="12"
+            height="12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+          {`${t(locale, "priorWork")} · ${priorRange}`}
+        </summary>
+
+        {/* El destino, vacío. Las doce filas llegan de `/prior-work/` al
+             abrir el pliegue: ver la nota de `PriorWork.astro`. Se monta el
+             mismo componente para que el CSS acotado de este archivo encaje
+             con lo que se inyecta. */}
+        <PriorWork locale={locale} items={[]} />
+
+        {/* Un párrafo y no una fila más: las filas de arriba son empleos, y
+            colar ahí algo que no lo es sería mentir en la semántica para
+            ahorrarse una etiqueta. */}
+        <p class="prior-skills">
+          {`${t(locale, "priorSkills")} · ${localized(otherSkills, locale).join(" · ")}`}
+        </p>
+      </details>
+    )
+  }
+  {
+    /* Aquí iba un párrafo `pdf-prior-summary` que resumía los doce empleos
+       anteriores en un renglón para el PDF. El currículum en papel ya no cuenta
+       esa etapa —ver el `@media print` de `.prior-work`— así que el resumen no
+       resume nada. */
+  }
+</Section>
+
+{
+  /* Sin animación de entrada por empleo, a propósito. Se probó revelar cada
+     `<article>` con `IntersectionObserver` y el resultado era peor: el layout
+     ya anima la sección entera con `animation-timeline: view()`, así que el
+     contenido se fundía dos veces. Medido a 1400×800: a `scrollY` 1000 la
+     sección llegaba a `opacity: 1` y sólo entonces el artículo empezaba *su*
+     fundido desde 0,42, terminándolo pasado 1800. Dos entradas encadenadas
+     para el mismo contenido. */
+}
+
+<style>
+  .experience-list {
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .experience-item {
+    padding: 0 0 2.75rem 2rem;
+    position: relative;
+  }
+
+  .experience-item:last-child {
+    padding-bottom: 0;
+  }
+
+  .experience-item::before {
+    background: var(--bg);
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    content: "";
+    height: 11px;
+    left: 0;
+    position: absolute;
+    top: 0.45rem;
+    width: 11px;
+  }
+
+  .experience-item:not(:last-child)::after {
+    background: var(--border);
+    bottom: -0.45rem;
+    content: "";
+    left: 5px;
+    position: absolute;
+    top: 1.15rem;
+    width: 1px;
+  }
+
+  article h3 {
+    color: var(--text);
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  article a {
+    align-items: center;
+    color: var(--text);
+    display: inline-flex;
+    gap: 0.35rem;
+    padding-block: 0.35rem;
+    text-decoration-color: transparent;
+    text-underline-offset: 0.2em;
+    transition:
+      color 0.2s ease,
+      text-decoration-color 0.2s ease;
+  }
+
+  @media (hover: hover) {
+    article a:hover {
+      color: var(--accent);
+      text-decoration-color: currentColor;
+    }
+  }
+
+  /* Qué es la empresa, junto a su nombre y con menos peso: es contexto, no
+     titular. El separador va en el CSS para que no acabe leyéndolo un lector de
+     pantalla como parte del nombre. */
+  .employer-note {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+
+  .employer-note::before {
+    content: "·";
+    margin-inline: 0.4rem;
+  }
+
+  /**
+   * El logo, delante del nombre.
+   *
+   * Sin fondo y en color: la teja blanca que llevaban antes existía para que la
+   * tinta oscura sobreviviera al tema oscuro, y a cambio metía trece
+   * rectángulos que no decían nada. El gris tampoco se quedó: a 16 px borraba
+   * cinco de los trece —uno se iba a **cero** tinta, porque su amarillo en
+   * escala de grises es un 220 sobre un fondo de 247—.
+   *
+   * En la ficha de arriba no lleva margen: el `<a>` es `inline-flex` con `gap`
+   * y ya separa. En el plegable no va pegado al nombre sino en su propia
+   * columna —ver `.prior-logo`—.
+   */
+  .company-logo {
+    /* La hoja global pone `display: block` a todo `img`, y dentro del enlace de
+       la ficha eso lo trataba como ítem de flex; aquí hace falta que sea texto. */
+    display: inline-block;
+    flex: 0 0 auto;
+    vertical-align: -0.2em;
+  }
+
+  /**
+   * Las tres marcas de una sola tinta oscura, aclaradas en tema oscuro.
+   *
+   * Inetum es `#001b53`; las otras dos son un negro plano y un monocromo que
+   * ya venía invertido. Contra `--bg` en oscuro no se ven, y **ningún filtro
+   * suave las salva**: `brightness()` multiplica, así que el negro sigue siendo
+   * negro y el marino de Inetum —con el canal rojo a cero— sólo se vuelve más
+   * eléctrico. `brightness(0) invert(1)` las pasa a silueta blanca,
+   * que es como las tres empresas pintan su logo sobre fondo negro.
+   *
+   * Los otros diez no llevan nada: su color aguanta los dos fondos.
+   *
+   * El `:global()` alrededor de `:root` no es adorno: sin él Astro le pega el
+   * `data-astro-cid-*` del componente y el selector no casa nunca. Mismo motivo
+   * que en `:global(:root[data-about-found]) .prior-work`. Y va con el patrón
+   * de tres estados —atributo explícito y preferencia del sistema— porque
+   * `light-dark()`, que es como va el resto de la paleta, sólo admite colores.
+   */
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme="light"])) .company-logo.ink {
+      filter: brightness(0) invert(1);
+    }
+  }
+
+  :global(:root[data-theme="dark"]) .company-logo.ink {
+    filter: brightness(0) invert(1);
+  }
+
+  /* SVG y no `↗` (U+2197): ese glifo no está en el subset `latin` de Inter, así
+     que caía a la fuente del sistema y desentonaba con el nombre. */
+  .external {
+    color: var(--text-subtle);
+    flex: 0 0 auto;
+    margin-left: 0.3em;
+    vertical-align: 0.05em;
+  }
+
+  article h4 {
+    color: var(--text-subtle);
+    font-size: 0.95rem;
+    font-weight: 500;
+    line-height: 1.45;
+    margin-top: 0.2rem;
+  }
+
+  footer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  footer > p {
+    color: var(--text-muted);
+    line-height: 1.65;
+  }
+
+  /* Los puntos destacados van plegados. Cuatro viñetas por empleo, siempre
+     abiertas, convertían la sección en un muro: el resumen basta para saber de
+     qué iba el trabajo y quien quiera el detalle lo abre.
+
+     Estuvieron a la vista del 06-10 al 07-10-2026, con el argumento de que son
+     lo que quien contrata viene a leer. Vuelven al pliegue por decisión suya:
+     con tres empleos y sus viñetas, la sección pedía media pantalla antes de
+     llegar a Proyectos.
+
+     El aspecto del desplegable —el `<summary>`, el chevrón, su giro, el hover y
+     la apertura forzada al imprimir— vive en el bloque global de
+     `Layout.astro`: la clase `.job-details` la comparten esta sección y las
+     certificaciones plegadas, y los estilos de componente en Astro van
+     acotados. Aquí sólo queda lo que es de este empleo. */
+  .highlights {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    list-style: disc;
+    margin: 0;
+    padding-left: 1.15rem;
+  }
+
+  .highlights li {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.55;
+    padding-left: 0.2rem;
+  }
+
+  .highlights li::marker {
+    color: var(--accent);
+  }
+
+  /**
+   * El pliegue de los empleos de antes de programar.
+   *
+   * Sangrado como el contenido de las fichas —2 rem, el hueco de la línea de
+   * tiempo— y no a ras del margen: cuelga de la misma columna que los empleos
+   * de arriba, que es lo que dice que sigue siendo experiencia y no una sección
+   * nueva. El punto y el hilo no llegan hasta aquí a propósito: no es un empleo
+   * más de la trayectoria, es lo que había antes de ella.
+   *
+   * El aspecto del desplegable —chevrón, giro, hover, apertura al imprimir—
+   * sale del bloque global de `.job-details` en `Layout.astro`.
+   */
+  /**
+   * El bloque no está hasta que se encuentra.
+   *
+   * Mismo secreto y mismo gesto que «Sobre mí»: se desvela manteniendo pulsado
+   * el retrato del hero hasta que las escuadras se cierran (`portraitFocus.ts`).
+   * Un hallazgo abre las dos cosas a la vez, que es lo coherente —son la misma
+   * puerta— y el atributo lo pone un script en línea del `<head>` antes del
+   * primer pintado, así que no aparece de golpe con la página ya montada.
+   *
+   * `display: none` y no `visibility` ni `opacity`: el desplegable no puede
+   * quedar ocupando sitio ni ser enfocable con el tabulador, o el secreto lo
+   * destapa la primera tabulación.
+   *
+   * El marcado **sí** sigue en el HTML servido, como el enlace de «Sobre mí»:
+   * esconderlo de los buscadores nunca fue el objetivo, y el mismo dato sigue a
+   * la vista en el panel Markdown, en `cat experience` y en `/cv.json`. Esto es
+   * un hallazgo, no un candado.
+   */
+  .prior-work {
+    display: none;
+  }
+
+  /* Y con JavaScript, que es quien trae las filas: el pliegue llega vacío y se
+     rellena al abrirlo (`priorWork.ts`). Sin guion, un `<details>` que se abre
+     y no enseña nada promete contenido y da un hueco, así que no se pinta.
+     `data-js` lo escribe el guion en línea del `<head>` antes del primer
+     pintado, de modo que esto no parpadea. */
+  :global(:root[data-js][data-about-found]) .prior-work {
+    display: block;
+    margin-top: 1.75rem;
+    padding-left: 2rem;
+  }
+
+  /* Filas con filete, la misma receta que Certificaciones e Idiomas: doce cajas
+     con superficie y radio pesarían como las tarjetas de proyecto, y esto son
+     filas estructuralmente idénticas. */
+  .prior-skills {
+    color: var(--text-subtle);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    margin: 0.6rem 0 0;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+
+  /* El chip de años vive en `DateRange.astro`, con su hover y su versión
+     impresa. */
+
+  @media (width <= 700px) {
+    .experience-item {
+      padding-left: 1.65rem;
+    }
+
+    .prior-work {
+      padding-left: 1.65rem;
+    }
+
+    header {
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    article a,
+    .employer {
+      transition: none;
+    }
+  }
+
+  @media print {
+    .experience-item {
+      padding-bottom: 0.45rem;
+    }
+
+    .highlights {
+      gap: 0.1rem;
+    }
+
+    .highlights li {
+      font-size: 0.72rem;
+      line-height: 1.3;
+    }
+
+    /**
+     * En papel no sale, y esto cambió de signo.
+     *
+     * Durante mucho tiempo la regla fue la contraria: el PDF es el currículum
+     * que lee un ATS y esconderle seis años de trabajo era un agujero. Se ha
+     * quitado a petición, y el argumento de entonces sigue siendo cierto sólo a
+     * medias: doce empleos de fábrica, almacén, cocina y campo entre 2014 y
+     * 2020 no son lo que decide una entrevista de desarrollo, y en una hoja A4
+     * ocupaban el sitio de lo que sí. Los años no desaparecen del expediente
+     * laboral de nadie: siguen en `cv.json`, en `/cv.json` y en el pliegue de
+     * la web.
+     *
+     * El pliegue vive escondido en pantalla hasta que alguien encuentra el
+     * visor del retrato (`:root[data-about-found]`), así que sin esta regla el
+     * PDF heredaría ese estado por accidente y no por decisión. Se declara.
+     *
+     * Y se declara **con el mismo selector** que lo enseña: una consulta de
+     * medio no suma especificidad, así que `.prior-work` a secas perdía contra
+     * `:root[data-js][data-about-found] .prior-work` y el pliegue se imprimía
+     * en cuanto alguien había encontrado el visor antes. Mismo recurso que la
+     * salida de emergencia de `.signal-text` en `Layout.astro`.
+     */
+    .prior-work,
+    :global(:root[data-js][data-about-found]) .prior-work {
+      display: none;
+    }
+
+    /* La URL no se imprime: son seis, y el PDF tiene que caber en una A4. */
+    .employer {
+      text-decoration: none;
+    }
+
+    /**
+     * Ni logos ni flechas en papel.
+     *
+     * Son adornos de pantalla, y en un PDF que va a pasar por un extractor de
+     * texto son además dos imágenes metidas dentro del renglón donde está el
+     * nombre de la empresa: hay extractores que parten la línea ahí. El nombre
+     * se lee igual sin ellas.
+     */
+    .company-logo,
+    .external {
+      display: none;
+    }
+  }
+</style>

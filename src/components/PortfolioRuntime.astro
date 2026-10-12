@@ -1,0 +1,58 @@
+<!-- Un solo punto de montaje reduce chunks y garantiza un AbortSignal común. -->
+<script>
+  import { mountContactCopy } from "@/lib/contactCopy"
+  import { mountContactForm } from "@/lib/contactForm"
+  import { mountAll, onPageLoad } from "@/lib/pageLifecycle"
+  import { mountPortraitFocus } from "@/lib/portraitFocus"
+  import { mountPortraitTheme } from "@/lib/portraitTheme"
+  import { mountPrintableDetails } from "@/lib/printableDetails"
+  import { mountPriorWork } from "@/lib/priorWork"
+  import { revealSequence } from "@/lib/animations"
+
+  onPageLoad((signal) => {
+    /* El orden importa y el aislamiento también: `mountAll` los monta en fila y
+       atrapa el que falle, para que un control roto no se lleve a los demás.
+       Ver `pageLifecycle.ts`. */
+    mountAll(signal, [
+      ["printable-details", mountPrintableDetails],
+      ["contact-form", mountContactForm],
+      ["contact-copy", mountContactCopy],
+      ["portrait-focus", mountPortraitFocus],
+      // El primer pintado lo resuelve el guion en línea de `Hero.astro`; esto
+      // sólo atiende los cambios de tema posteriores. Ver `portraitTheme.ts`.
+      ["portrait-theme", mountPortraitTheme],
+      // Las filas de «Antes de programar» no viajan en el HTML: se descargan
+      // al abrir el pliegue. Ver `priorWork.ts`.
+      ["prior-work", mountPriorWork],
+    ])
+
+    /* El titular sale de aquí: lo revela su propio barrido de columnas en
+       CSS (`headline-matrix` en `Hero.astro`). Si siguiera en la lista, la
+       entrada escalonada le animaría la opacidad mientras la máscara va por su
+       cuenta, y se verían las dos entradas encima.
+
+       Los controles entran **uno a uno** y no la fila de golpe: las dos
+       acciones y los cuatro puertos son cajas de 44 px, y encenderlas en fila
+       es lo que hace un aparato al arrancar. `revealSequence` ya escalona a
+       0,04 s por elemento, así que los ocho tardan 0,32 s en total — no se
+       espera a nada.
+
+       El `tagline` tampoco entra: es texto de lectura, y un párrafo que se
+       pinta, se apaga y vuelve a encenderse se ve como un parpadeo, no como un
+       arranque.
+
+       `.contact-list a` y no los hijos de la fila: el último es el acuse del
+       portapapeles, que está vacío hasta que alguien copia el correo y no
+       necesita entrada. */
+    const hero = document.querySelector(".hero")
+    if (hero) {
+      revealSequence(
+        Array.from(
+          hero.querySelectorAll(
+            ".location, .hero-status, .actions > a, .contact-list a",
+          ),
+        ),
+      )
+    }
+  })
+</script>
